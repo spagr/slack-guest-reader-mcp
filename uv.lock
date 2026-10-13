@@ -1957,6 +1957,7 @@ name = "slack-guest-reader-mcp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "fastmcp" },
     { name = "google-cloud-firestore" },
     { name = "httpx" },
@@ -1978,6 +1979,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=43" },
     { name = "fastmcp", specifier = ">=4.1,<5" },
     { name = "google-cloud-firestore", specifier = ">=2.19,<3" },
     { name = "httpx", specifier = ">=0.28,<1" },

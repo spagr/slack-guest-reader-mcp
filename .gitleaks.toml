@@ -53,6 +53,7 @@ keywords = ["service_account"]
 description = "Obviously fake placeholders used in docs and tests"
 regexes = [
   '''xoxb-TEST-TOKEN''',
+  '''xoxp-TEST-TOKEN''',
   '''xoxb-REPLACE-ME''',
   '''GOCSPX-REPLACE-ME''',
 ]

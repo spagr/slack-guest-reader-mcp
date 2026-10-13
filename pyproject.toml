@@ -13,6 +13,7 @@ dependencies = [
     "google-cloud-firestore>=2.19,<3",
     "py-key-value-aio[firestore,wrappers-encryption]>=0.4,<1",
     "uvicorn>=0.30",
+    "cryptography>=43",
 ]
 
 [project.scripts]

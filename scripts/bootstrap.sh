@@ -51,7 +51,7 @@ else
   fi
   ok "created project $PROJECT_ID"
 fi
-gcloud config set project "$PROJECT_ID" >/dev/null
+gcloud config set project "$PROJECT_ID" >/dev/null 2>&1
 
 info "Billing"
 if [[ "$(gcloud billing projects describe "$PROJECT_ID" --format='value(billingEnabled)' 2>/dev/null)" == "True" ]]; then
@@ -67,19 +67,22 @@ fi
 
 info "Budget alert"
 if [[ "${SKIP_BUDGET:-no}" != "yes" ]]; then
-  ask BUDGET_USD "Monthly budget alert in USD (0 to skip)" "5"
-  if [[ "$BUDGET_USD" != "0" ]]; then
-    BA="$(gcloud billing projects describe "$PROJECT_ID" --format='value(billingAccountName)')"
-    gcloud services enable billingbudgets.googleapis.com >/dev/null
+  BA="$(gcloud billing projects describe "$PROJECT_ID" --format='value(billingAccountName)')"
+  # The amount must be in the billing account's currency; a suffix like "USD" is rejected
+  # on accounts billed in another currency.
+  CURRENCY="$(gcloud billing accounts describe "${BA#billingAccounts/}" --format='value(currencyCode)' 2>/dev/null || echo "your billing currency")"
+  ask BUDGET_AMOUNT "Monthly budget alert in $CURRENCY (0 to skip)" "5"
+  if [[ "$BUDGET_AMOUNT" != "0" ]]; then
+    gcloud services enable billingbudgets.googleapis.com >/dev/null 2>&1
     if gcloud billing budgets list --billing-account="$BA" --format='value(displayName)' 2>/dev/null \
         | grep -qx "$SERVICE budget"; then
       ok "budget exists"
     else
       gcloud billing budgets create --billing-account="$BA" --display-name="$SERVICE budget" \
-        --budget-amount="${BUDGET_USD}USD" --filter-projects="projects/$PROJECT_ID" \
+        --budget-amount="$BUDGET_AMOUNT" --filter-projects="projects/$PROJECT_ID" \
         --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0 >/dev/null \
-        && ok "budget alert at \$$BUDGET_USD created" \
-        || warn "could not create a budget (needs Billing Account Administrator); continuing"
+        && ok "budget alert at $BUDGET_AMOUNT $CURRENCY created" \
+        || warn "could not create a budget (needs Billing Account Administrator or Costs Manager); continuing"
     fi
   fi
 fi

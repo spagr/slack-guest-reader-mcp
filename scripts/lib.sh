@@ -95,6 +95,12 @@ require_login() {
 # secret_exists NAME
 secret_exists() { gcloud secrets describe "$1" --project="$PROJECT_ID" >/dev/null 2>&1; }
 
+# secret_has_version NAME — true when at least one enabled version exists.
+secret_has_version() {
+  [[ -n "$(gcloud secrets versions list "$1" --project="$PROJECT_ID" --filter='state:ENABLED' \
+      --format='value(name)' --limit=1 2>/dev/null)" ]]
+}
+
 # ensure_secret NAME "prompt" [required]
 # Creates the secret if missing and adds a version from hidden input when a value
 # is given. Existing secrets are left untouched unless UPDATE_SECRETS=1.

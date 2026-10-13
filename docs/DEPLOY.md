@@ -30,7 +30,8 @@ It is idempotent and asks only for what it cannot find in `bootstrap.env`
    projects are untouched.
 3. Links a billing account. Cloud Run, Firestore and Secret Manager fit the free tier
    at this usage, but billing must be linked.
-4. Creates a budget alert (default 5 USD; answer `0` to skip).
+4. Creates a budget alert (default 5 in the billing account's currency; answer `0`
+   to skip).
 5. Enables the APIs: run, cloudbuild, artifactregistry, secretmanager, firestore, iam,
    logging.
 6. Creates the Firestore database (Native mode, your region) and a TTL policy on
@@ -79,9 +80,12 @@ request timeout and `--allow-unauthenticated` (Claude's servers call it; protect
 is OAuth on `/mcp` and signature verification on `/slack/events`).
 
 Environment on the service: `SLACK_CHANNEL_ALLOWLIST`, `ME_USER_ID`, `ALLOWED_EMAILS`,
-`GOOGLE_CLIENT_ID`, `PUBLIC_BASE_URL`, `TIMEZONE`, `FIRESTORE_ENABLED=true`,
-`GOOGLE_CLOUD_PROJECT`, plus the secrets mounted as env vars. Answer `yes` to
-"Enable the Slack Events receiver" once the signing secret is stored to mount it too.
+`GOOGLE_CLIENT_ID`, `PUBLIC_BASE_URL`, `TIMEZONE` (an IANA name such as
+`Europe/Prague`, checked before deploying), `FIRESTORE_ENABLED=true`,
+`GOOGLE_CLOUD_PROJECT`, plus the secrets mounted as env vars. The script refuses to
+deploy while `SLACK_BOT_TOKEN` or `GOOGLE_CLIENT_SECRET` has no version. Answer `yes`
+to "Enable the Slack Events receiver" once the signing secret is stored; if it is
+still empty the service is deployed without the receiver and a warning says so.
 
 ## 4. Connect in Claude
 

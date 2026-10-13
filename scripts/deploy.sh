@@ -19,8 +19,12 @@ ask SLACK_CHANNEL_ALLOWLIST "Slack channel IDs to allow (comma-separated)"
 ask ME_USER_ID "Your Slack user ID in that workspace (U…)"
 ask ALLOWED_EMAILS "Google account emails allowed to connect (comma-separated)"
 ask GOOGLE_CLIENT_ID "Google OAuth client ID"
-ask TIMEZONE "Timezone for rendered times" "UTC"
+ask TIMEZONE "Timezone for rendered times (IANA name, e.g. Europe/Prague)" "UTC"
 ask ENABLE_EVENTS "Enable the Slack Events receiver (phase 2)? yes/no" "no"
+
+if [[ -d /usr/share/zoneinfo && ! -f "/usr/share/zoneinfo/$TIMEZONE" ]]; then
+  die "TIMEZONE '$TIMEZONE' is not an IANA zone name (try Europe/Prague). Fix it in $ENV_FILE"
+fi
 
 use_gcloud_config
 SA_EMAIL="${SERVICE_ACCOUNT}@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -51,9 +55,19 @@ ensure_secret SLACK_SIGNING_SECRET "Slack signing secret (phase 2, may be empty 
 PUBLIC_BASE_URL="$(cloud_run_url)"
 save_var PUBLIC_BASE_URL "$PUBLIC_BASE_URL"
 
+# Cloud Run refuses to mount a secret that has no version, so check before deploying.
+for s in SLACK_BOT_TOKEN GOOGLE_CLIENT_SECRET; do
+  secret_has_version "$s" || die "secret $s has no value yet. Run: UPDATE_SECRETS=1 scripts/deploy.sh"
+done
 SECRETS="SLACK_BOT_TOKEN=SLACK_BOT_TOKEN:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest"
 if [[ "$ENABLE_EVENTS" == "yes" ]]; then
-  SECRETS="$SECRETS,SLACK_SIGNING_SECRET=SLACK_SIGNING_SECRET:latest"
+  if secret_has_version SLACK_SIGNING_SECRET; then
+    SECRETS="$SECRETS,SLACK_SIGNING_SECRET=SLACK_SIGNING_SECRET:latest"
+  else
+    warn "ENABLE_EVENTS=yes but SLACK_SIGNING_SECRET has no value; deploying without the events receiver"
+    warn "store it with UPDATE_SECRETS=1 scripts/deploy.sh and redeploy to enable phase 2"
+    ENABLE_EVENTS=no
+  fi
 fi
 # Joined with '|' because the allowlists themselves contain commas; `^|^` below tells
 # gcloud to split on '|' instead of the default ','.

@@ -27,18 +27,9 @@ ask PROJECT_ID "New or existing GCP project ID (6-30 chars, lowercase, digits, h
 ask REGION "Region (Cloud Run + Firestore)" "europe-west1"
 ask SERVICE "Cloud Run service name" "slack-guest-reader"
 ask SERVICE_ACCOUNT "Runtime service account name" "slack-guest-reader"
-ask GCLOUD_CONFIG "Named gcloud configuration to use" "slack-guest-reader"
 
-info "gcloud configuration '$GCLOUD_CONFIG'"
-if gcloud config configurations describe "$GCLOUD_CONFIG" >/dev/null 2>&1; then
-  ok "configuration exists"
-else
-  gcloud config configurations create "$GCLOUD_CONFIG" >/dev/null
-  ok "created configuration"
-fi
-gcloud config configurations activate "$GCLOUD_CONFIG" >/dev/null
-gcloud config set account "$ACCOUNT" >/dev/null
-ok "using account $ACCOUNT"
+use_gcloud_config
+ok "using account $ACCOUNT (your shell's active gcloud configuration is left alone)"
 
 info "Project"
 if gcloud projects describe "$PROJECT_ID" >/dev/null 2>&1; then

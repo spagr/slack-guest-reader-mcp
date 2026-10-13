@@ -25,7 +25,9 @@ It is idempotent and asks only for what it cannot find in `bootstrap.env`
 1. Pre-flight: `gcloud` present, logged in, lets you confirm or change the account
    (useful when several accounts are logged in).
 2. Creates the project (with `--organization` when you have one) inside a named
-   gcloud configuration, so your other projects are untouched.
+   gcloud configuration. The scripts select it with `CLOUDSDK_ACTIVE_CONFIG_NAME`
+   for their own process only, so your shell's active configuration and other
+   projects are untouched.
 3. Links a billing account. Cloud Run, Firestore and Secret Manager fit the free tier
    at this usage, but billing must be linked.
 4. Creates a budget alert (default 5 USD; answer `0` to skip).

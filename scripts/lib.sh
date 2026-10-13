@@ -67,6 +67,24 @@ confirm() {
 
 gcloud_active_account() { gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null; }
 
+# use_gcloud_config — run every gcloud call in the named configuration without
+# touching the user's active one. CLOUDSDK_ACTIVE_CONFIG_NAME is honoured by gcloud and
+# lives only in this process, so the shell's configuration is unchanged afterwards.
+use_gcloud_config() {
+  ask GCLOUD_CONFIG "Named gcloud configuration to use" "slack-guest-reader"
+  if gcloud config configurations describe "$GCLOUD_CONFIG" >/dev/null 2>&1; then
+    ok "gcloud configuration '$GCLOUD_CONFIG' exists"
+  else
+    gcloud config configurations create "$GCLOUD_CONFIG" --no-activate >/dev/null 2>&1
+    ok "created gcloud configuration '$GCLOUD_CONFIG'"
+  fi
+  export CLOUDSDK_ACTIVE_CONFIG_NAME="$GCLOUD_CONFIG"
+  # `config set` only writes the property; it warns on stderr when the project does not
+  # exist yet (bootstrap creates it right after), so keep both quiet.
+  if [[ -n "${ACCOUNT:-}" ]]; then gcloud config set account "$ACCOUNT" >/dev/null 2>&1; fi
+  if [[ -n "${PROJECT_ID:-}" ]]; then gcloud config set project "$PROJECT_ID" >/dev/null 2>&1; fi
+}
+
 require_login() {
   need_cmd gcloud
   local account; account="$(gcloud_active_account)"

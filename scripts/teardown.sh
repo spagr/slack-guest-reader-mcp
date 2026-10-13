@@ -12,6 +12,7 @@ ask PROJECT_ID "GCP project ID"
 ask REGION "Cloud Run region" "europe-west1"
 ask SERVICE "Cloud Run service name" "slack-guest-reader"
 ask SERVICE_ACCOUNT "Runtime service account name" "slack-guest-reader"
+use_gcloud_config
 
 echo
 warn "This permanently deletes resources in project $PROJECT_ID."
@@ -24,7 +25,6 @@ if [[ "${1:-}" == "--project" ]]; then
   exit 0
 fi
 
-gcloud config set project "$PROJECT_ID" >/dev/null
 if gcloud run services describe "$SERVICE" --region "$REGION" >/dev/null 2>&1; then
   gcloud run services delete "$SERVICE" --region "$REGION" --quiet && ok "deleted service $SERVICE"
 else

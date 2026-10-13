@@ -22,7 +22,7 @@ ask GOOGLE_CLIENT_ID "Google OAuth client ID"
 ask TIMEZONE "Timezone for rendered times" "UTC"
 ask ENABLE_EVENTS "Enable the Slack Events receiver (phase 2)? yes/no" "no"
 
-gcloud config set project "$PROJECT_ID" >/dev/null
+use_gcloud_config
 SA_EMAIL="${SERVICE_ACCOUNT}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 info "Enabling APIs"

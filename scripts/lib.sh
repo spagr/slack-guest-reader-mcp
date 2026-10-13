@@ -113,14 +113,28 @@ ensure_secret() {
     ok "created secret $name"
   fi
   local value
-  read -r -s -p "$prompt (input hidden, Enter to skip): " value; echo
-  if [[ -z "$value" ]]; then
-    [[ -z "$required" ]] || warn "$name has no value yet; the service will not start until it does"
-    return
-  fi
+  while true; do
+    read -r -s -p "$prompt (input hidden, Enter to skip): " value; echo
+    if [[ -z "$value" ]]; then
+      [[ -z "$required" ]] || warn "$name has no value yet; the service will not start until it does"
+      return
+    fi
+    secret_looks_valid "$name" "$value" && break
+    warn "that does not look like a $name (paste the whole value, nothing is echoed); try again or Enter to skip"
+  done
   printf '%s' "$value" | gcloud secrets versions add "$name" --project="$PROJECT_ID" --data-file=- >/dev/null
   unset value
   ok "stored a new version of $name"
+}
+
+# secret_looks_valid NAME VALUE — cheap shape checks so a stray keystroke or a wrong
+# token type is caught at the prompt instead of at container start. Prints nothing.
+secret_looks_valid() {
+  local name="$1" value="$2"
+  case "$name" in
+    SLACK_BOT_TOKEN) [[ "$value" == xoxb-* && ${#value} -ge 20 ]] ;;
+    *) [[ ${#value} -ge 8 ]] ;;
+  esac
 }
 
 cloud_run_url() {

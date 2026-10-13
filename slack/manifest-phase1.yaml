@@ -1,0 +1,29 @@
+# Slack app manifest (phase 1: polling only, no Events API).
+# Workspace admin: https://api.slack.com/apps -> "Create New App" -> "From a manifest".
+display_information:
+  name: Guest Reader (read-only)
+  description: Lets an external collaborator's assistant read agreed channels. Read-only.
+  long_description: >-
+    Read-only access for an external collaborator's AI assistant to an explicit list
+    of channels. The app only reads messages, threads, reactions and member names in
+    channels it is invited to. It cannot post, react, edit, join channels on its own,
+    download files or read direct messages. Revoke at any time by removing the app
+    from the workspace.
+  background_color: "#2c2d30"
+features:
+  bot_user:
+    display_name: Guest Reader
+    always_online: false
+oauth_config:
+  scopes:
+    bot:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - users:read
+      - reactions:read
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

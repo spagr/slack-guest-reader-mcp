@@ -1,0 +1,58 @@
+# gitleaks configuration: default rules plus Slack-specific prefixes.
+# Run locally:  gitleaks git --config .gitleaks.toml .
+# Pre-commit:   gitleaks protect --staged --config .gitleaks.toml
+
+title = "slack-guest-reader-mcp"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "slack-bot-token-strict"
+description = "Slack bot token (xoxb-)"
+regex = '''xoxb-[0-9A-Za-z-]{10,}'''
+keywords = ["xoxb-"]
+
+[[rules]]
+id = "slack-user-token-strict"
+description = "Slack user token (xoxp-)"
+regex = '''xoxp-[0-9A-Za-z-]{10,}'''
+keywords = ["xoxp-"]
+
+[[rules]]
+id = "slack-session-token"
+description = "Slack web-client session token (xoxc-)"
+regex = '''xoxc-[0-9A-Za-z-]{10,}'''
+keywords = ["xoxc-"]
+
+[[rules]]
+id = "slack-session-cookie"
+description = "Slack web-client session cookie (xoxd-)"
+regex = '''xoxd-[0-9A-Za-z%+/=-]{10,}'''
+keywords = ["xoxd-"]
+
+[[rules]]
+id = "slack-app-token"
+description = "Slack app-level token (xapp-)"
+regex = '''xapp-[0-9]-[0-9A-Za-z-]{10,}'''
+keywords = ["xapp-"]
+
+[[rules]]
+id = "google-oauth-client-secret"
+description = "Google OAuth client secret (GOCSPX-)"
+regex = '''GOCSPX-[0-9A-Za-z_-]{20,}'''
+keywords = ["GOCSPX-"]
+
+[[rules]]
+id = "google-service-account-json"
+description = "Google service account key material"
+regex = '''"type"\s*:\s*"service_account"'''
+keywords = ["service_account"]
+
+[allowlist]
+description = "Obviously fake placeholders used in docs and tests"
+regexes = [
+  '''xoxb-TEST-TOKEN''',
+  '''xoxb-REPLACE-ME''',
+  '''GOCSPX-REPLACE-ME''',
+]

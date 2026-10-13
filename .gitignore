@@ -1,0 +1,32 @@
+# --- credentials & local config (see CLAUDE.md "HARD RULE") ---
+.env
+.env.*
+!.env.example
+bootstrap.env
+*.local.*
+*credentials*.json
+*-key.json
+service-account*.json
+.gcloud/
+.config/gcloud/
+*.pem
+*.p12
+
+# --- python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- editors / os ---
+.idea/
+.vscode/
+.DS_Store

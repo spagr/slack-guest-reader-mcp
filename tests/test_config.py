@@ -45,3 +45,16 @@ def test_load_settings_exits_with_readable_error(monkeypatch: pytest.MonkeyPatch
         load_settings()
     assert exc.value.code == 1
     assert "SLACK_BOT_TOKEN" in capsys.readouterr().err
+
+
+def test_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.conftest import BASE_ENV
+
+    from slack_guest_reader.config import Settings
+
+    for key, value in BASE_ENV.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("ALLOWED_EMAILS", "a@example.com, B@example.com")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.slack_channel_allowlist == ["C0000000001", "G0000000002"]
+    assert s.allowed_emails == ["a@example.com", "b@example.com"]

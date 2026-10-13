@@ -11,7 +11,7 @@ from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BeforeValidator, Field, SecretStr, ValidationError, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 def _split_csv(value: object) -> object:
@@ -21,7 +21,8 @@ def _split_csv(value: object) -> object:
     return value
 
 
-CsvList = Annotated[list[str], BeforeValidator(_split_csv)]
+# NoDecode stops pydantic-settings from JSON-decoding the env value before we split it.
+CsvList = Annotated[list[str], NoDecode, BeforeValidator(_split_csv)]
 
 
 class Settings(BaseSettings):

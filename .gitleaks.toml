@@ -55,5 +55,6 @@ regexes = [
   '''xoxb-TEST-TOKEN''',
   '''xoxp-TEST-TOKEN''',
   '''xoxb-REPLACE-ME''',
+  '''xoxb-PLACEHOLDER''',
   '''GOCSPX-REPLACE-ME''',
 ]

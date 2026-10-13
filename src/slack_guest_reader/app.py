@@ -84,8 +84,10 @@ def create_mcp(
     )
     register_tools(mcp, services)
 
-    @mcp.custom_route("/healthz", methods=["GET"], include_in_schema=False)
-    async def healthz(_: Request) -> Response:
+    # Not /healthz: Google's frontend answers that exact path itself on Cloud Run
+    # (HTML 404) and the request never reaches the container. See docs/DECISIONS.md.
+    @mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
+    async def health(_: Request) -> Response:
         return JSONResponse({"status": "ok", "version": __version__})
 
     if settings.slack_signing_secret is not None:

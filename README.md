@@ -47,7 +47,8 @@ Firestore (oauth state, user cache, cursors, events)
 
 Endpoints: `/mcp` (Streamable HTTP, OAuth-protected), the OAuth endpoints and
 `/.well-known/*` metadata that the MCP authorisation spec requires, `/slack/events`
-(signature-verified, phase 2) and `/healthz`.
+(signature-verified, phase 2) and `/health` (not `/healthz`, which Cloud Run's
+frontend intercepts).
 
 ## Setup, end to end
 

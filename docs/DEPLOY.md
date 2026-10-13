@@ -87,6 +87,14 @@ deploy while `SLACK_BOT_TOKEN` or `GOOGLE_CLIENT_SECRET` has no version. Answer 
 to "Enable the Slack Events receiver" once the signing secret is stored; if it is
 still empty the service is deployed without the receiver and a warning says so.
 
+### No bot token yet?
+
+You can deploy and test the Google sign-in and the Claude connector before the
+workspace admin has created the Slack app. When `SLACK_BOT_TOKEN` is empty,
+`deploy.sh` offers to store an obviously fake placeholder (`xoxb-PLACEHOLDER-…`) so
+the container starts. Every Slack tool then returns `invalid_auth` until you store the
+real token with `UPDATE_SECRETS=1 scripts/deploy.sh` and redeploy.
+
 ## 4. Connect in Claude
 
 Settings -> Connectors -> Add custom connector -> paste `https://<service-url>/mcp`.

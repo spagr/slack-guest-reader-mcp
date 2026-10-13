@@ -56,9 +56,9 @@ PUBLIC_BASE_URL="$(cloud_run_url)"
 save_var PUBLIC_BASE_URL "$PUBLIC_BASE_URL"
 
 # Cloud Run refuses to mount a secret that has no version, so check before deploying.
-for s in SLACK_BOT_TOKEN GOOGLE_CLIENT_SECRET; do
-  secret_has_version "$s" || die "secret $s has no value yet. Run: UPDATE_SECRETS=1 scripts/deploy.sh"
-done
+offer_placeholder_bot_token
+secret_has_version GOOGLE_CLIENT_SECRET \
+  || die "secret GOOGLE_CLIENT_SECRET has no value yet. Run: UPDATE_SECRETS=1 scripts/deploy.sh"
 SECRETS="SLACK_BOT_TOKEN=SLACK_BOT_TOKEN:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest"
 if [[ "$ENABLE_EVENTS" == "yes" ]]; then
   if secret_has_version SLACK_SIGNING_SECRET; then
@@ -95,7 +95,7 @@ cat <<SUMMARY
 Done.
 
   Service URL:                 $PUBLIC_BASE_URL
-  Health check:                $PUBLIC_BASE_URL/healthz
+  Health check:                $PUBLIC_BASE_URL/health
   OAuth redirect URI (Google): $PUBLIC_BASE_URL/auth/callback
   Slack events request URL:    $PUBLIC_BASE_URL/slack/events
   MCP URL for Claude:          $PUBLIC_BASE_URL/mcp

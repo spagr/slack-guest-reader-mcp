@@ -110,3 +110,27 @@ rate-limit policy all move quickly.
 - `python:3.12-slim` with uv copied from `ghcr.io/astral-sh/uv:0.11.32`; no
   BuildKit cache mounts so that Cloud Build's plain `docker build` works. Non-root
   user, only the virtualenv and `src/` are copied into the runtime stage.
+
+## 2026-10-13: Health endpoint is `/health`, not `/healthz`
+
+- On the first real deploy, `GET /healthz` on the Cloud Run URL (both the
+  deterministic `*.run.app` and the legacy `*.a.run.app` form) returned Google's own
+  HTML 404 page with no request log entry on the revision, while `/health` and
+  `/healthz/` reached the container. Google's frontend answers the exact path
+  `/healthz` itself. The liveness route was therefore renamed to `/health` in
+  `app.py`, the tests, `deploy.sh` and the docs. CLAUDE.md was updated to match.
+
+## 2026-10-13: Scripts never touch the user's active gcloud configuration
+
+- `bootstrap.sh` used to `configurations activate` the named configuration and
+  `deploy.sh` wrote `core/project` into whatever configuration was active. The
+  scripts now create the configuration with `--no-activate` and select it through
+  `CLOUDSDK_ACTIVE_CONFIG_NAME`, which lives only in the script's process.
+
+## 2026-10-13: Placeholder bot token before the Slack app exists
+
+- The operator usually deploys and tests the OAuth flow before the workspace admin
+  has created the Slack app. `Settings` requires an `xoxb-` token, so `deploy.sh`
+  offers to store `xoxb-PLACEHOLDER-…` in Secret Manager; the service starts and
+  every Slack call fails with `invalid_auth` until the real token replaces it.
+  Startup does not call `auth.test`, deliberately, so the placeholder is harmless.

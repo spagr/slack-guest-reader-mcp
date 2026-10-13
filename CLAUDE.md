@@ -92,7 +92,8 @@ Single container, single service. Endpoints:
 - `/mcp`: the MCP Streamable HTTP endpoint (OAuth-protected).
 - OAuth endpoints and `/.well-known/*` metadata, as required by the MCP auth spec (provided by the FastMCP auth layer).
 - `/slack/events`: Slack Events API receiver (phase 2). This endpoint is **not** OAuth-protected. It must verify the Slack signature instead (`X-Slack-Signature`, `X-Slack-Request-Timestamp`, 5-minute replay window, constant-time compare) and handle the `url_verification` challenge.
-- `/healthz`: liveness check, no data.
+- `/health`: liveness check, no data. (Not `/healthz`: Google's frontend answers that
+  path itself on Cloud Run and the request never reaches the container.)
 
 ## Authentication (MCP side)
 

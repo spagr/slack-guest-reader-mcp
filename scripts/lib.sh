@@ -127,6 +127,21 @@ ensure_secret() {
   ok "stored a new version of $name"
 }
 
+# offer_placeholder_bot_token — when the admin has not issued the Slack app yet, store an
+# obviously fake xoxb- value so the service starts and the OAuth flow and the Claude
+# connector can be tested. Slack tools return invalid_auth until the real token replaces it.
+offer_placeholder_bot_token() {
+  secret_has_version SLACK_BOT_TOKEN && return 0
+  echo "SLACK_BOT_TOKEN has no value. Without it the container refuses to start."
+  if confirm "Store a placeholder token so you can test deploy + OAuth before the admin sends the real one?"; then
+    printf 'xoxb-PLACEHOLDER-replace-with-the-real-bot-token-0000' \
+      | gcloud secrets versions add SLACK_BOT_TOKEN --project="$PROJECT_ID" --data-file=- >/dev/null
+    ok "stored a placeholder SLACK_BOT_TOKEN (replace it later with UPDATE_SECRETS=1 scripts/deploy.sh)"
+  else
+    die "secret SLACK_BOT_TOKEN has no value yet. Run: UPDATE_SECRETS=1 scripts/deploy.sh"
+  fi
+}
+
 # secret_looks_valid NAME VALUE — cheap shape checks so a stray keystroke or a wrong
 # token type is caught at the prompt instead of at container start. Prints nothing.
 secret_looks_valid() {

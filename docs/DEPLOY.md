@@ -22,7 +22,8 @@ scripts/bootstrap.sh
 It is idempotent and asks only for what it cannot find in `bootstrap.env`
 (gitignored; holds non-secret answers so re-runs and `deploy.sh` reuse them). In order:
 
-1. Pre-flight: `gcloud` present, logged in, shows the active account.
+1. Pre-flight: `gcloud` present, logged in, lets you confirm or change the account
+   (useful when several accounts are logged in).
 2. Creates the project (with `--organization` when you have one) inside a named
    gcloud configuration, so your other projects are untouched.
 3. Links a billing account. Cloud Run, Firestore and Secret Manager fit the free tier
@@ -64,7 +65,12 @@ prints these steps with deep links for your project:
 ```bash
 scripts/deploy.sh                     # build from source with Cloud Build and deploy
 UPDATE_SECRETS=1 scripts/deploy.sh    # also offer to enter new secret versions
+ENABLE_EVENTS=yes scripts/deploy.sh   # override a remembered answer for this run
 ```
+
+Answers are remembered in `bootstrap.env`. A variable set in the environment wins over
+the remembered value for that run; edit the file to change it permanently. The upload
+to Cloud Build follows `.gcloudignore`, so `bootstrap.env`, tests and docs stay local.
 
 The service runs with `--min-instances=0`, 1 vCPU, 512 MiB, concurrency 20, 60 s
 request timeout and `--allow-unauthenticated` (Claude's servers call it; protection

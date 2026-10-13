@@ -1,0 +1,23 @@
+# What `gcloud run deploy --source` uploads to Cloud Build. Mirrors .dockerignore so
+# local config, credentials and non-runtime files never leave the machine.
+.git
+.github
+.venv
+.env
+.env.*
+bootstrap.env
+*.local.*
+*credentials*.json
+*-key.json
+service-account*.json
+.gcloud
+.config
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+tests
+docs
+scripts
+slack
+.claude

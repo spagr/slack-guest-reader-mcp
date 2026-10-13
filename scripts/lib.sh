@@ -16,10 +16,15 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || die "'$1' is not installed"; }
 
 # Load non-secret values collected by earlier runs (gitignored file).
 load_env() {
-  if [[ -f "$ENV_FILE" ]]; then
-    # shellcheck disable=SC1090
-    set -a; source "$ENV_FILE"; set +a
-  fi
+  [[ -f "$ENV_FILE" ]] || return 0
+  # Values already set in the environment win, so `ENABLE_EVENTS=yes scripts/deploy.sh`
+  # overrides what an earlier run remembered.
+  local line name value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
+    name="${line%%=*}"; value="${line#*=}"
+    if [[ -z "${!name+x}" ]]; then export "$name=$value"; fi
+  done < "$ENV_FILE"
 }
 
 # save_var NAME VALUE — persist a non-secret value to bootstrap.env (idempotent).

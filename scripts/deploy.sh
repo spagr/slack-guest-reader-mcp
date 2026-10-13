@@ -55,10 +55,12 @@ SECRETS="SLACK_BOT_TOKEN=SLACK_BOT_TOKEN:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIE
 if [[ "$ENABLE_EVENTS" == "yes" ]]; then
   SECRETS="$SECRETS,SLACK_SIGNING_SECRET=SLACK_SIGNING_SECRET:latest"
 fi
-ENV_VARS="SLACK_CHANNEL_ALLOWLIST=${SLACK_CHANNEL_ALLOWLIST},ME_USER_ID=${ME_USER_ID}"
-ENV_VARS="$ENV_VARS,ALLOWED_EMAILS=${ALLOWED_EMAILS},GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
-ENV_VARS="$ENV_VARS,PUBLIC_BASE_URL=${PUBLIC_BASE_URL},TIMEZONE=${TIMEZONE},FIRESTORE_ENABLED=true"
-ENV_VARS="$ENV_VARS,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LOG_LEVEL=${LOG_LEVEL:-INFO}"
+# Joined with '|' because the allowlists themselves contain commas; `^|^` below tells
+# gcloud to split on '|' instead of the default ','.
+ENV_VARS="SLACK_CHANNEL_ALLOWLIST=${SLACK_CHANNEL_ALLOWLIST}|ME_USER_ID=${ME_USER_ID}"
+ENV_VARS="$ENV_VARS|ALLOWED_EMAILS=${ALLOWED_EMAILS}|GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
+ENV_VARS="$ENV_VARS|PUBLIC_BASE_URL=${PUBLIC_BASE_URL}|TIMEZONE=${TIMEZONE}|FIRESTORE_ENABLED=true"
+ENV_VARS="$ENV_VARS|GOOGLE_CLOUD_PROJECT=${PROJECT_ID}|LOG_LEVEL=${LOG_LEVEL:-INFO}"
 
 info "Deploying $SERVICE to $REGION (Cloud Build from source)"
 gcloud run deploy "$SERVICE" \
@@ -69,7 +71,7 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --min-instances 0 --max-instances 2 \
   --cpu 1 --memory 512Mi --concurrency 20 --timeout 60 \
-  --set-env-vars "^,^${ENV_VARS}" \
+  --set-env-vars "^|^${ENV_VARS}" \
   --set-secrets "$SECRETS" \
   --quiet
 ok "deployed"

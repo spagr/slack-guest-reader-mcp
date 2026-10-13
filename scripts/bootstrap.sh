@@ -13,6 +13,16 @@ info "Pre-flight"
 need_cmd gcloud
 require_login
 
+# Pick the identity before switching configurations: a fresh configuration has no
+# account, and the first credentialed account is not necessarily the right one.
+if [[ -z "${ACCOUNT:-}" ]]; then
+  echo "Credentialed accounts:"
+  gcloud auth list --format='value(account)' | sed 's/^/  - /'
+fi
+ask ACCOUNT "Google account to use for this deployment" "$(gcloud_active_account)"
+gcloud auth list --format='value(account)' | grep -qx "$ACCOUNT" \
+  || die "'$ACCOUNT' is not logged in. Run: gcloud auth login $ACCOUNT"
+
 ask PROJECT_ID "New or existing GCP project ID (6-30 chars, lowercase, digits, hyphens)"
 ask REGION "Region (Cloud Run + Firestore)" "europe-west1"
 ask SERVICE "Cloud Run service name" "slack-guest-reader"
@@ -27,9 +37,8 @@ else
   ok "created configuration"
 fi
 gcloud config configurations activate "$GCLOUD_CONFIG" >/dev/null
-gcloud config set account "$(gcloud_active_account || true)" >/dev/null 2>&1 || true
-ACCOUNT="$(gcloud auth list --format='value(account)' | head -n1)"
 gcloud config set account "$ACCOUNT" >/dev/null
+ok "using account $ACCOUNT"
 
 info "Project"
 if gcloud projects describe "$PROJECT_ID" >/dev/null 2>&1; then

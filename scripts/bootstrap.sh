@@ -78,11 +78,13 @@ if [[ "${SKIP_BUDGET:-no}" != "yes" ]]; then
         | grep -qx "$SERVICE budget"; then
       ok "budget exists"
     else
-      gcloud billing budgets create --billing-account="$BA" --display-name="$SERVICE budget" \
-        --budget-amount="$BUDGET_AMOUNT" --filter-projects="projects/$PROJECT_ID" \
-        --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0 >/dev/null \
-        && ok "budget alert at $BUDGET_AMOUNT $CURRENCY created" \
-        || warn "could not create a budget (needs Billing Account Administrator or Costs Manager); continuing"
+      if gcloud billing budgets create --billing-account="$BA" --display-name="$SERVICE budget" \
+          --budget-amount="$BUDGET_AMOUNT" --filter-projects="projects/$PROJECT_ID" \
+          --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0 >/dev/null; then
+        ok "budget alert at $BUDGET_AMOUNT $CURRENCY created"
+      else
+        warn "could not create a budget (needs Billing Account Administrator or Costs Manager); continuing"
+      fi
     fi
   fi
 fi
@@ -102,8 +104,11 @@ fi
 if gcloud firestore fields ttls list --collection-group=events --format='value(name)' 2>/dev/null | grep -q expires_at; then
   ok "TTL policy on events.expires_at exists"
 else
-  gcloud firestore fields ttls update expires_at --collection-group=events --enable-ttl --async >/dev/null \
-    && ok "TTL policy on events.expires_at requested" || warn "could not set the TTL policy; see docs/DEPLOY.md"
+  if gcloud firestore fields ttls update expires_at --collection-group=events --enable-ttl --async >/dev/null; then
+    ok "TTL policy on events.expires_at requested"
+  else
+    warn "could not set the TTL policy; see docs/DEPLOY.md"
+  fi
 fi
 
 info "Secrets (values can be entered now or later with UPDATE_SECRETS=1 scripts/deploy.sh)"

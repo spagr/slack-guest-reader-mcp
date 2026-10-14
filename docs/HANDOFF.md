@@ -29,7 +29,7 @@ Keep this current at the end of every session (cloud or local).
   and `/health` answers 200. Cloud Build builds the same Dockerfile in under a minute.
 - The deployed service answers 401 + `resource_metadata` on `/mcp`, serves both
   OAuth metadata documents, and `/health` returns 200. The health route was renamed
-  from `/health`, which Google's frontend intercepts on Cloud Run (HTML 404, request
+  from `/healthz`, which Google's frontend intercepts on Cloud Run (HTML 404, request
   never reaches the container).
 - `scripts/bootstrap.sh` on a fresh project: project, billing link, APIs, Firestore
   Native + TTL policy, service account, secrets, OAuth-client checklist, deploy.
@@ -57,20 +57,49 @@ Keep this current at the end of every session (cloud or local).
 - Budget creation can fail with `INVALID_ARGUMENT` even with the fix if the account
   lacks Billing Account Costs Manager; the script warns and continues.
 
-**Not verified yet**
+**Not verified yet** (see the 2026-10-14 sections for what moved)
 
-1. `FirestoreStore` paths against the real database under real traffic. They now
-   pass against the Firestore emulator (see the 2026-10-14 section below), which
-   does not cover TTL deletion or production IAM.
-2. The full OAuth flow from Claude web and mobile. First attempt reached
-   `/authorize` and failed on Firestore document IDs (fixed, see DECISIONS); the
-   retry after that fix is the next manual step. The same request shape is now
-   covered by `tests/test_oauth_authorize.py` against the in-memory backend.
-3. All tools against the real workspace: the admin has not created the Slack app yet,
+1. `FirestoreStore` paths against the real database under real traffic. They pass
+   against the Firestore emulator, which does not cover TTL deletion or production IAM.
+2. All tools against the real workspace: the admin has not created the Slack app yet,
    the deployed service runs with a placeholder `xoxb-PLACEHOLDER-…` token and every
    Slack tool returns `invalid_auth` until the real token is stored.
-4. Phase 2 against real Slack retries and the 3 s ack window.
-5. `teardown.sh`.
+3. Phase 2 against real Slack retries and the 3 s ack window.
+4. `teardown.sh`.
+
+## Local session 2026-10-14 (connector works end-to-end)
+
+**Verified from Claude web against the deployed service**
+
+- Custom connector added, Google sign-in, consent, token exchange, tool listing: the
+  connector shows the five read-only tools. `list_channels` called through it returns
+  `invalid_auth` for every allowlisted channel, which is the expected result with the
+  placeholder bot token (OAuth and the MCP transport are fine; only Slack is missing).
+
+**Problems met on the way, all fixed in this branch**
+
+- The "Checking the server" step of Claude's connector dialog gives up after 10 s,
+  which the cold start used to take. `deploy.sh` now passes `--cpu-boost`; a retry
+  always works because the instance is warm by then.
+- `/authorize` returned 500: Claude identifies itself with a Client ID Metadata
+  Document, so `client_id` is a URL and the Firestore key-value store used it verbatim
+  as a document ID. The store now uses `FirestoreV1KeySanitizationStrategy`.
+- `/token` returned 401 after a successful Google login: `ALLOWED_EMAILS` listed an
+  address from another domain while the consent screen is **Internal**, which only
+  admits accounts of the project's Workspace organisation. Lesson for `bootstrap.env`:
+  the allowed email must be one the consent screen lets in. DEPLOY.md troubleshooting
+  explains the `rejected sign-in` log line.
+
+**Also added**
+
+- Optional Sentry error reporting (`SENTRY_DSN` secret, Starlette integration). Data
+  collection is fixed in code so no user info, bodies, query strings or stack locals
+  ever leave the service. Verified: the startup log shows `sentry enabled`.
+- `scripts/render-manifest.sh` writes the gitignored `slack/manifest.local.yaml` with
+  the deployment's `/slack/events` URL. The admin request now sends
+  `slack/manifest-phase1.yaml` first: Slack verifies the events URL when a manifest
+  is saved, and that needs the signing secret deployed, which only exists once the
+  app does.
 
 ## Local session 2026-10-14 (closing the test gaps)
 
@@ -113,8 +142,13 @@ UPDATE_SECRETS=1 scripts/deploy.sh            # paste the token, Enter on the ot
 
 # Phase 2
 UPDATE_SECRETS=1 ENABLE_EVENTS=yes scripts/deploy.sh   # paste the signing secret
-# -> admin adds Event Subscriptions (slack/manifest.yaml) with https://<service>/slack/events
+scripts/render-manifest.sh                              # -> slack/manifest.local.yaml
+# -> admin adds Event Subscriptions with the request URL from that file
 ```
+
+Waiting on: the workspace admin creating the app from `slack/manifest-phase1.yaml`,
+inviting it to the agreed channels and handing over the bot token and signing secret
+(the short request is in `docs/ADMIN_REQUEST.md`).
 
 Local run without GCP: `cp .env.example .env`, fill the Slack values and a Google
 client with redirect URI `http://localhost:8080/auth/callback`, keep

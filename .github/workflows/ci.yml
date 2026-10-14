@@ -60,6 +60,10 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: uv sync --locked --group dev
+      - uses: actions/setup-java@v4  # the emulator needs a Java 21+ JRE on PATH
+        with:
+          distribution: temurin
+          java-version: "21"
       - uses: google-github-actions/setup-gcloud@v3
         with:
           install_components: cloud-firestore-emulator

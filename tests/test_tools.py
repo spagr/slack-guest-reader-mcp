@@ -152,7 +152,7 @@ async def test_bad_time_values_give_clear_errors(client: Client) -> None:  # typ
         await client.call_tool("get_messages", {"channel": CHANNEL, "since": "1d", "until": "2d"})
 
 
-async def test_healthz_route_exposes_no_data(settings: Settings, slack: SlackClient) -> None:
+async def test_health_route_exposes_no_data(settings: Settings, slack: SlackClient) -> None:
     import httpx
 
     from slack_guest_reader.app import create_app
@@ -161,6 +161,6 @@ async def test_healthz_route_exposes_no_data(settings: Settings, slack: SlackCli
     async with app.router.lifespan_context(app):
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
-            response = await http.get("/healthz")
+            response = await http.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"

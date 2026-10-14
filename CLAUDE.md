@@ -92,7 +92,8 @@ Single container, single service. Endpoints:
 - `/mcp`: the MCP Streamable HTTP endpoint (OAuth-protected).
 - OAuth endpoints and `/.well-known/*` metadata, as required by the MCP auth spec (provided by the FastMCP auth layer).
 - `/slack/events`: Slack Events API receiver (phase 2). This endpoint is **not** OAuth-protected. It must verify the Slack signature instead (`X-Slack-Signature`, `X-Slack-Request-Timestamp`, 5-minute replay window, constant-time compare) and handle the `url_verification` challenge.
-- `/healthz`: liveness check, no data.
+- `/health`: liveness check, no data. (Not `/healthz`: Google's frontend answers that
+  path itself on Cloud Run and the request never reaches the container.)
 
 ## Authentication (MCP side)
 
@@ -198,6 +199,7 @@ MCP cannot push to the assistant. Notifications are pulled when the user asks.
 | `NOTIFY_THREAD_ACTIVITY` | no | default `true` |
 | `NOTIFY_GROUP_MENTIONS` | no | default `false` |
 | `ALERT_WEBHOOK_URL` | no | phase 2 |
+| `SENTRY_DSN` | no | optional error reporting; no PII, bodies or locals are sent |
 | `LOG_LEVEL` | no | default `INFO` |
 
 Validate config at startup with pydantic-settings and fail fast with a readable error. Provide `.env.example` with placeholders only.

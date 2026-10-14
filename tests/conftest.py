@@ -222,3 +222,10 @@ def body(response: Any) -> Any:
         sc = response.structured_content
         return sc["result"] if isinstance(sc, dict) and set(sc) == {"result"} else sc
     return json.loads(response.content[0].text)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "emulator: needs the Firestore emulator (FIRESTORE_EMULATOR_HOST); skipped otherwise",
+    )

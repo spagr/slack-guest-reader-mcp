@@ -110,3 +110,96 @@ rate-limit policy all move quickly.
 - `python:3.12-slim` with uv copied from `ghcr.io/astral-sh/uv:0.11.32`; no
   BuildKit cache mounts so that Cloud Build's plain `docker build` works. Non-root
   user, only the virtualenv and `src/` are copied into the runtime stage.
+
+## 2026-10-13: Health endpoint is `/health`, not `/healthz`
+
+- On the first real deploy, `GET /healthz` on the Cloud Run URL (both the
+  deterministic `*.run.app` and the legacy `*.a.run.app` form) returned Google's own
+  HTML 404 page with no request log entry on the revision, while `/health` and
+  `/healthz/` reached the container. Google's frontend answers the exact path
+  `/healthz` itself. The liveness route was therefore renamed to `/health` in
+  `app.py`, the tests, `deploy.sh` and the docs. CLAUDE.md was updated to match.
+
+## 2026-10-13: Scripts never touch the user's active gcloud configuration
+
+- `bootstrap.sh` used to `configurations activate` the named configuration and
+  `deploy.sh` wrote `core/project` into whatever configuration was active. The
+  scripts now create the configuration with `--no-activate` and select it through
+  `CLOUDSDK_ACTIVE_CONFIG_NAME`, which lives only in the script's process.
+
+## 2026-10-13: Placeholder bot token before the Slack app exists
+
+- The operator usually deploys and tests the OAuth flow before the workspace admin
+  has created the Slack app. `Settings` requires an `xoxb-` token, so `deploy.sh`
+  offers to store `xoxb-PLACEHOLDER-…` in Secret Manager; the service starts and
+  every Slack call fails with `invalid_auth` until the real token replaces it.
+  Startup does not call `auth.test`, deliberately, so the placeholder is harmless.
+
+## 2026-10-14: OAuth key-value store sanitizes Firestore document IDs
+
+- On the first real OAuth attempt from Claude, `/authorize` returned 500. Claude
+  identifies itself with a Client ID Metadata Document, so `client_id` is a URL
+  (`https://claude.ai/oauth/mcp-oauth-client-metadata`). FastMCP's OAuth proxy stores
+  the client under that key, `py-key-value-aio`'s Firestore store used it verbatim as
+  the document ID, and Firestore rejected the `/` characters with
+  `INVALID_ARGUMENT ... lacks a collection id`. The store now gets
+  `FirestoreV1KeySanitizationStrategy` for keys and collections (replaces `/`,
+  appends a short hash). Existing documents written before this change had valid IDs
+  and are unaffected.
+
+## 2026-10-14: Startup CPU boost
+
+- Cold start was about 10 s (instance start to Uvicorn ready), which matched the
+  timeout of the "Checking the server" step in Claude's connector dialog and made the
+  first attempt fail. `deploy.sh` now passes `--cpu-boost`; `--min-instances=1` was
+  rejected because it leaves the free tier.
+
+## 2026-10-14: Sentry, opt-in, with content never sent
+
+- `sentry-sdk` (2.x) is initialised only when `SENTRY_DSN` is set. The Starlette
+  integration is used (FastMCP runs on Starlette under uvicorn); Sentry's Cloud
+  Functions `GcpIntegration` from the onboarding page does not apply to Cloud Run.
+- Privacy settings are fixed in code, not configurable, through the SDK's
+  `data_collection` option (`send_default_pii` is deprecated in sentry-sdk 2.72):
+  no user info, cookies, request bodies, query strings or stack-frame locals,
+  because bodies and locals can hold Slack message text, which this server must
+  never emit. Tracing is off by default (`SENTRY_TRACES_SAMPLE_RATE=0`). Docs relied
+  on: docs.sentry.io/platforms/python/configuration/options (data_collection) and
+  /platforms/python/data-management/data-collected.
+- The DSN lives in Secret Manager like the other secrets; `deploy.sh` mounts it only
+  when a version exists.
+
+## 2026-10-14: Tests cover Firestore and Client ID Metadata Documents
+
+- Two production bugs (`/healthz` intercepted by Google's frontend, URL-shaped
+  `client_id` rejected as a Firestore document ID) passed a suite that only used the
+  in-memory store and assumed dynamic client registration. Closed with three things:
+  - **Firestore emulator tests** (`tests/test_firestore_emulator.py`, marker
+    `emulator`): `FirestoreStore` and `build_oauth_backend` run against
+    `gcloud emulators firestore start`. They are skipped unless
+    `FIRESTORE_EMULATOR_HOST` is set, so the default `uv run pytest` needs no Google
+    tooling; a dedicated CI job starts the emulator and fails if they were skipped.
+    The emulator does not enforce TTL policies, so expiry is asserted on the stored
+    `expires_at` only.
+  - **`/authorize` with a CIMD client** (`tests/test_oauth_authorize.py`) against the
+    in-memory backend, through the consent page to the Google redirect.
+  - **`scripts/smoke.sh`** after every deploy.
+- What `fastmcp==4.1.0` does with a URL `client_id`, verified in the installed
+  sources (`fastmcp/server/auth/cimd.py`, `oauth_proxy/proxy.py`,
+  `server/auth/ssrf.py`; the gofastmcp.com "OAuth Proxy" page marks CIMD as beta):
+  - `OAuthProxy(enable_cimd=True)` is the default. `get_client()` first reads the
+    client store under the raw `client_id` (this is the read that reached Firestore
+    unsanitized), then, for an `https://` URL with a non-root path, fetches the
+    document through `CIMDClientManager` and synthesizes a `ProxyDCRClient`; such
+    clients are kept in a bounded in-process cache, not persisted. An upstream
+    `client_id` sent directly is also accepted.
+  - The fetch uses `ssrf_safe_fetch_response`, built on `httpx2` with DNS pinning and
+    private-range blocking. `respx` only patches `httpx` 0.x, so the tests replace
+    `fastmcp.server.auth.cimd.ssrf_safe_fetch_response` with an in-process fake.
+  - A document without `scope` gets the proxy's default scope, which for Google is
+    the full `userinfo.email` URI; a request for the short form `email` is answered
+    with an `invalid_scope` error redirect to the client. Well-behaved clients
+    request `scopes_supported` from the AS metadata, which is what the test does.
+  - A valid client first gets a 302 to `/consent?txn_id=…` (consent mode
+    `remember`); approving the CSRF-protected form redirects to
+    `accounts.google.com` with our upstream client ID and PKCE parameters.

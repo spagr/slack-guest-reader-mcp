@@ -16,6 +16,7 @@ from . import __version__
 from .auth import build_auth, build_client_storage
 from .config import Settings, load_settings
 from .events import EventProcessor, make_events_endpoint
+from .observability import init_sentry
 from .slack_client import SlackClient
 from .store import FirestoreStore, InMemoryStore, Store
 from .tools import Services, register_tools
@@ -51,11 +52,22 @@ def build_oauth_backend(settings: Settings) -> Any:
         return None
     from google.cloud import firestore
     from key_value.aio.stores.firestore import FirestoreStore as KVFirestoreStore
+    from key_value.aio.stores.firestore.store import FirestoreV1KeySanitizationStrategy
 
     client = firestore.AsyncClient(
         project=settings.google_cloud_project, database=settings.firestore_database
     )
-    return KVFirestoreStore(client=client, default_collection="oauth")
+    # Keys become Firestore document IDs. Claude sends its client_id as a URL
+    # (Client ID Metadata Document, e.g. https://claude.ai/oauth/...), and an ID
+    # containing "/" is rejected with INVALID_ARGUMENT, so sanitize keys and
+    # collection names (replaces "/" and appends a short hash for uniqueness).
+    sanitize = FirestoreV1KeySanitizationStrategy()
+    return KVFirestoreStore(
+        client=client,
+        default_collection="oauth",
+        key_sanitization_strategy=sanitize,
+        collection_sanitization_strategy=sanitize,
+    )
 
 
 def create_mcp(
@@ -84,8 +96,10 @@ def create_mcp(
     )
     register_tools(mcp, services)
 
-    @mcp.custom_route("/healthz", methods=["GET"], include_in_schema=False)
-    async def healthz(_: Request) -> Response:
+    # Not /healthz: Google's frontend answers that exact path itself on Cloud Run
+    # (HTML 404) and the request never reaches the container. See docs/DECISIONS.md.
+    @mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
+    async def health(_: Request) -> Response:
         return JSONResponse({"status": "ok", "version": __version__})
 
     if settings.slack_signing_secret is not None:
@@ -128,6 +142,7 @@ def configure_logging(level: str) -> None:
 def main() -> None:
     settings = load_settings()
     configure_logging(settings.log_level)
+    init_sentry(settings)
     import uvicorn
 
     app = create_app(settings)

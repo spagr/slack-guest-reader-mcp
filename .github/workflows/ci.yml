@@ -47,3 +47,45 @@ jobs:
         run: uv run mypy
       - name: Pytest
         run: uv run pytest -q
+
+  emulator:
+    name: Firestore emulator tests
+    runs-on: ubuntu-latest
+    env:
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8681
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: uv sync --locked --group dev
+      - uses: actions/setup-java@v4  # the emulator needs a Java 21+ JRE on PATH
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          install_components: cloud-firestore-emulator
+      - name: Start the Firestore emulator
+        run: |
+          gcloud emulators firestore start --host-port="$FIRESTORE_EMULATOR_HOST" \
+            --database-mode=firestore-native --project=emulator-test > emulator.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS "http://$FIRESTORE_EMULATOR_HOST/" >/dev/null 2>&1; then exit 0; fi
+            sleep 1
+          done
+          cat emulator.log; echo "emulator did not start"; exit 1
+      - name: Pytest (emulator-marked tests only, none may be skipped)
+        run: |
+          set -o pipefail
+          uv run pytest -q -m emulator -rs 2>&1 | tee pytest.log
+          if grep -Eq "^SKIPPED| skipped" pytest.log; then echo "emulator tests were skipped"; exit 1; fi
+
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: shellcheck scripts/*.sh
+        run: shellcheck --version && shellcheck -x scripts/*.sh

@@ -31,9 +31,13 @@ only with your knowledge, I'd need a small Slack app installed in your workspace
 **Setup (about 5 minutes)**
 
 1. Go to https://api.slack.com/apps -> "Create New App" -> "From a manifest",
-   pick this workspace and paste the manifest I've attached (`slack/manifest.yaml`).
-   It lists exactly the scopes above: `channels:history`, `channels:read`,
-   `groups:history`, `groups:read`, `users:read`, `reactions:read`.
+   pick this workspace and paste the manifest I've attached
+   (`slack/manifest-phase1.yaml`). It lists exactly the scopes above:
+   `channels:history`, `channels:read`, `groups:history`, `groups:read`, `users:read`,
+   `reactions:read`. [Later, once events are enabled on my side, I may ask you to
+   add the Event Subscriptions request URL from `slack/manifest.local.yaml`; Slack
+   verifies that URL when it is saved, so it only works after my server has your
+   signing secret.]
 2. Click "Install to Workspace" and approve.
 3. In each agreed channel, run `/invite @Guest Reader` (the app's bot user).
 4. Under "OAuth & Permissions", copy the **Bot User OAuth Token** (starts with `xoxb-`),

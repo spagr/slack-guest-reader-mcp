@@ -139,10 +139,10 @@ sign-in. Only emails in `ALLOWED_EMAILS` (verified by Google) get through.
 
 1. Store the signing secret (`UPDATE_SECRETS=1 scripts/deploy.sh`) and answer `yes` to
    enabling events; redeploy.
-2. Ask the admin to add Event Subscriptions (or create the app from
-   `slack/manifest.yaml`, which already contains them) with request URL
-   `https://<service-url>/slack/events` and bot events `message.channels`,
-   `message.groups`, `reaction_added`. Slack sends a `url_verification` challenge;
+2. Run `scripts/render-manifest.sh`: it writes `slack/manifest.local.yaml` (gitignored)
+   with this deployment's `https://<service-url>/slack/events` filled in. Ask the admin
+   to add Event Subscriptions with that request URL and bot events `message.channels`,
+   `message.groups`, `reaction_added`, or to update the app from that manifest. Slack sends a `url_verification` challenge;
    the server answers it only with a valid signature.
 
 ## 6. Teardown

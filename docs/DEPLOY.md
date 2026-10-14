@@ -76,8 +76,14 @@ the remembered value for that run; edit the file to change it permanently. The u
 to Cloud Build follows `.gcloudignore`, so `bootstrap.env`, tests and docs stay local.
 
 The service runs with `--min-instances=0`, 1 vCPU, 512 MiB, concurrency 20, 60 s
-request timeout and `--allow-unauthenticated` (Claude's servers call it; protection
-is OAuth on `/mcp` and signature verification on `/slack/events`).
+request timeout, startup CPU boost and `--allow-unauthenticated` (Claude's servers
+call it; protection is OAuth on `/mcp` and signature verification on `/slack/events`).
+
+Scaling to zero means the first request after idle pays a cold start. Without CPU
+boost that took about 10 s on the first real deploy, which is exactly the timeout of
+the "Checking the server" step in Claude's connector dialog; with boost it is a few
+seconds. If the dialog still says "Couldn't check the server", the instance is now
+warm: cancel and add the connector again.
 
 Environment on the service: `SLACK_CHANNEL_ALLOWLIST`, `ME_USER_ID`, `ALLOWED_EMAILS`,
 `GOOGLE_CLIENT_ID`, `PUBLIC_BASE_URL`, `TIMEZONE` (an IANA name such as
@@ -123,6 +129,8 @@ left for you to delete in the Console (the script prints the links).
 
 ## Troubleshooting
 
+- Claude's connector dialog says "Couldn't check the server": almost always a cold
+  start that exceeded the dialog's 10 s timeout. Retry; the instance is warm now.
 - `Configuration error:` on startup: a required env var is missing or malformed. The
   message names it. `gcloud run services logs read SERVICE --region REGION`.
 - Google sign-in succeeds but Claude shows an authorisation error: the email is not in

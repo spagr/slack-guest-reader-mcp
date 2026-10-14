@@ -134,3 +134,22 @@ rate-limit policy all move quickly.
   offers to store `xoxb-PLACEHOLDER-…` in Secret Manager; the service starts and
   every Slack call fails with `invalid_auth` until the real token replaces it.
   Startup does not call `auth.test`, deliberately, so the placeholder is harmless.
+
+## 2026-10-14: OAuth key-value store sanitizes Firestore document IDs
+
+- On the first real OAuth attempt from Claude, `/authorize` returned 500. Claude
+  identifies itself with a Client ID Metadata Document, so `client_id` is a URL
+  (`https://claude.ai/oauth/mcp-oauth-client-metadata`). FastMCP's OAuth proxy stores
+  the client under that key, `py-key-value-aio`'s Firestore store used it verbatim as
+  the document ID, and Firestore rejected the `/` characters with
+  `INVALID_ARGUMENT ... lacks a collection id`. The store now gets
+  `FirestoreV1KeySanitizationStrategy` for keys and collections (replaces `/`,
+  appends a short hash). Existing documents written before this change had valid IDs
+  and are unaffected.
+
+## 2026-10-14: Startup CPU boost
+
+- Cold start was about 10 s (instance start to Uvicorn ready), which matched the
+  timeout of the "Checking the server" step in Claude's connector dialog and made the
+  first attempt fail. `deploy.sh` now passes `--cpu-boost`; `--min-instances=1` was
+  rejected because it leaves the free tier.

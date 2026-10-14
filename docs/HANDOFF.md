@@ -61,7 +61,9 @@ Keep this current at the end of every session (cloud or local).
 
 1. `FirestoreStore` paths against the real database (`ArrayUnion`, `create()`
    AlreadyExists, the `events` query) under real traffic.
-2. The full OAuth flow from Claude web and mobile (deployed, pending a manual test).
+2. The full OAuth flow from Claude web and mobile. First attempt reached
+   `/authorize` and failed on Firestore document IDs (fixed, see DECISIONS); the
+   retry after that fix is the next manual step.
 3. All tools against the real workspace: the admin has not created the Slack app yet,
    the deployed service runs with a placeholder `xoxb-PLACEHOLDER-…` token and every
    Slack tool returns `invalid_auth` until the real token is stored.

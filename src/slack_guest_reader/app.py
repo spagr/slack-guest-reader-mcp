@@ -51,11 +51,22 @@ def build_oauth_backend(settings: Settings) -> Any:
         return None
     from google.cloud import firestore
     from key_value.aio.stores.firestore import FirestoreStore as KVFirestoreStore
+    from key_value.aio.stores.firestore.store import FirestoreV1KeySanitizationStrategy
 
     client = firestore.AsyncClient(
         project=settings.google_cloud_project, database=settings.firestore_database
     )
-    return KVFirestoreStore(client=client, default_collection="oauth")
+    # Keys become Firestore document IDs. Claude sends its client_id as a URL
+    # (Client ID Metadata Document, e.g. https://claude.ai/oauth/...), and an ID
+    # containing "/" is rejected with INVALID_ARGUMENT, so sanitize keys and
+    # collection names (replaces "/" and appends a short hash for uniqueness).
+    sanitize = FirestoreV1KeySanitizationStrategy()
+    return KVFirestoreStore(
+        client=client,
+        default_collection="oauth",
+        key_sanitization_strategy=sanitize,
+        collection_sanitization_strategy=sanitize,
+    )
 
 
 def create_mcp(

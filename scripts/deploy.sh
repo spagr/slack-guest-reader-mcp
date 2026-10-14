@@ -96,6 +96,13 @@ gcloud run deploy "$SERVICE" \
   --quiet
 ok "deployed"
 
+if [[ "${SKIP_SMOKE:-0}" == "1" ]]; then
+  warn "SKIP_SMOKE=1: not running scripts/smoke.sh"
+else
+  "$REPO_ROOT/scripts/smoke.sh" "$PUBLIC_BASE_URL" \
+    || die "the deployed service failed the smoke test (see docs/DEPLOY.md, 'Smoke test')"
+fi
+
 cat <<SUMMARY
 
 Done.

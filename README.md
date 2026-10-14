@@ -104,14 +104,26 @@ process with a readable list of problems. `.env.example` has placeholders.
 
 ```bash
 uv sync --group dev
-uv run pre-commit install          # gitleaks + ruff on every commit
+uv run pre-commit install          # gitleaks, ruff and shellcheck on every commit
 cp .env.example .env               # fill in placeholders; .env is gitignored
 uv run slack-guest-reader          # http://localhost:8080
 ```
 
 Checks: `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy`,
-`uv run pytest`. All tests run against a fake Slack API (respx) and an in-memory
-store; no credentials are needed.
+`uv run pytest`. The default test run uses a fake Slack API (respx) and an in-memory
+store; no credentials are needed. The Firestore paths (`FirestoreStore` and the
+OAuth key-value backend) have their own tests against the Firestore emulator, which
+are skipped unless `FIRESTORE_EMULATOR_HOST` is set:
+
+```bash
+gcloud components install cloud-firestore-emulator      # once; needs Java
+gcloud emulators firestore start --host-port=127.0.0.1:8681 \
+  --database-mode=firestore-native --project=emulator-test &
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8681 uv run pytest -m emulator
+```
+
+After a deploy, `scripts/smoke.sh` checks the public surface of the service (see
+`docs/DEPLOY.md`).
 
 To poke at the server with the MCP Inspector:
 

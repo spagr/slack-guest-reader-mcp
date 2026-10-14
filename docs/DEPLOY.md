@@ -101,6 +101,25 @@ workspace admin has created the Slack app. When `SLACK_BOT_TOKEN` is empty,
 the container starts. Every Slack tool then returns `invalid_auth` until you store the
 real token with `UPDATE_SECRETS=1 scripts/deploy.sh` and redeploy.
 
+### Smoke test
+
+`deploy.sh` ends by running `scripts/smoke.sh` against the new revision (set
+`SKIP_SMOKE=1` to skip). You can run it any time, for example after changing the
+Google OAuth client or when Claude's connector dialog misbehaves:
+
+```bash
+scripts/smoke.sh                              # PUBLIC_BASE_URL from bootstrap.env
+scripts/smoke.sh https://your-service.example.com
+```
+
+It sends only unauthenticated requests and prints one line per check: `/health` is
+200 JSON, `POST /mcp` without a token is 401 with `resource_metadata` in
+`WWW-Authenticate`, both OAuth metadata documents are 200 JSON, and `/authorize` with
+an unknown URL-shaped `client_id` (how Claude identifies itself, see
+`docs/DECISIONS.md`) answers 4xx rather than 5xx. The exit code is non-zero if any
+check fails. The first request may take a few seconds on a cold start; raise
+`CURL_MAX_TIME` (default 30 s) on a slow link.
+
 ### Error reporting with Sentry (optional)
 
 Create a Python project in Sentry (the "Cloud Run" or plain Python platform; not the

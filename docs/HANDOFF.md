@@ -59,23 +59,57 @@ Keep this current at the end of every session (cloud or local).
 
 **Not verified yet**
 
-1. `FirestoreStore` paths against the real database (`ArrayUnion`, `create()`
-   AlreadyExists, the `events` query) under real traffic.
+1. `FirestoreStore` paths against the real database under real traffic. They now
+   pass against the Firestore emulator (see the 2026-10-14 section below), which
+   does not cover TTL deletion or production IAM.
 2. The full OAuth flow from Claude web and mobile. First attempt reached
    `/authorize` and failed on Firestore document IDs (fixed, see DECISIONS); the
-   retry after that fix is the next manual step.
+   retry after that fix is the next manual step. The same request shape is now
+   covered by `tests/test_oauth_authorize.py` against the in-memory backend.
 3. All tools against the real workspace: the admin has not created the Slack app yet,
    the deployed service runs with a placeholder `xoxb-PLACEHOLDER-…` token and every
    Slack tool returns `invalid_auth` until the real token is stored.
 4. Phase 2 against real Slack retries and the 3 s ack window.
 5. `teardown.sh`.
 
+## Local session 2026-10-14 (closing the test gaps)
+
+Two production bugs escaped the mock-only suite (`/healthz`, URL-shaped `client_id`
+as a Firestore document ID). Now covered:
+
+- `tests/test_firestore_emulator.py` (marker `emulator`, skipped without
+  `FIRESTORE_EMULATOR_HOST`): `FirestoreStore` users cache (TTL, expiry), cursors,
+  my-threads `ArrayUnion`, events `create()` idempotency and the `event_ts_num`
+  ordered query; `build_oauth_backend` round trips of Claude's
+  `https://claude.ai/oauth/mcp-oauth-client-metadata` key plus `/`, `.`, `..` and
+  `__x__` edge cases, asserting the document IDs Firestore sees contain no `/`; the
+  Fernet-wrapped stack stores nothing in clear text.
+- `tests/test_oauth_authorize.py`: `/authorize` with a Client ID Metadata Document
+  client through consent to the Google redirect; unknown URL, mismatched document,
+  foreign `redirect_uri`, unregistered scope, random client all end in 4xx or an
+  OAuth error redirect, never 5xx. Plus both metadata documents and 401 on `/mcp`.
+- `scripts/smoke.sh`, run by `deploy.sh` after every deploy (`SKIP_SMOKE=1` skips).
+- CI: an `emulator` job (gcloud emulator, fails if the tests were skipped) and a
+  `shellcheck` job; shellcheck also runs in pre-commit (`.shellcheckrc` follows the
+  sourced `lib.sh`).
+
+Running the emulator tests locally (needs Java and the gcloud component
+`cloud-firestore-emulator`):
+
+```bash
+gcloud components install cloud-firestore-emulator
+gcloud emulators firestore start --host-port=127.0.0.1:8681 \
+  --database-mode=firestore-native --project=emulator-test &
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8681 uv run pytest -m emulator
+```
+
 ## Next steps, in order (local machine)
 
 ```bash
 # Once the admin sends the bot token (see docs/ADMIN_REQUEST.md):
 UPDATE_SECRETS=1 scripts/deploy.sh            # paste the token, Enter on the others
-# -> in Claude: list_channels, get_messages, get_thread, search_messages, get_notifications
+# -> deploy.sh ends with scripts/smoke.sh; then in Claude: list_channels, get_messages,
+#    get_thread, search_messages, get_notifications
 
 # Phase 2
 UPDATE_SECRETS=1 ENABLE_EVENTS=yes scripts/deploy.sh   # paste the signing secret

@@ -168,3 +168,38 @@ rate-limit policy all move quickly.
   /platforms/python/data-management/data-collected.
 - The DSN lives in Secret Manager like the other secrets; `deploy.sh` mounts it only
   when a version exists.
+
+## 2026-10-14: Tests cover Firestore and Client ID Metadata Documents
+
+- Two production bugs (`/healthz` intercepted by Google's frontend, URL-shaped
+  `client_id` rejected as a Firestore document ID) passed a suite that only used the
+  in-memory store and assumed dynamic client registration. Closed with three things:
+  - **Firestore emulator tests** (`tests/test_firestore_emulator.py`, marker
+    `emulator`): `FirestoreStore` and `build_oauth_backend` run against
+    `gcloud emulators firestore start`. They are skipped unless
+    `FIRESTORE_EMULATOR_HOST` is set, so the default `uv run pytest` needs no Google
+    tooling; a dedicated CI job starts the emulator and fails if they were skipped.
+    The emulator does not enforce TTL policies, so expiry is asserted on the stored
+    `expires_at` only.
+  - **`/authorize` with a CIMD client** (`tests/test_oauth_authorize.py`) against the
+    in-memory backend, through the consent page to the Google redirect.
+  - **`scripts/smoke.sh`** after every deploy.
+- What `fastmcp==4.1.0` does with a URL `client_id`, verified in the installed
+  sources (`fastmcp/server/auth/cimd.py`, `oauth_proxy/proxy.py`,
+  `server/auth/ssrf.py`; the gofastmcp.com "OAuth Proxy" page marks CIMD as beta):
+  - `OAuthProxy(enable_cimd=True)` is the default. `get_client()` first reads the
+    client store under the raw `client_id` (this is the read that reached Firestore
+    unsanitized), then, for an `https://` URL with a non-root path, fetches the
+    document through `CIMDClientManager` and synthesizes a `ProxyDCRClient`; such
+    clients are kept in a bounded in-process cache, not persisted. An upstream
+    `client_id` sent directly is also accepted.
+  - The fetch uses `ssrf_safe_fetch_response`, built on `httpx2` with DNS pinning and
+    private-range blocking. `respx` only patches `httpx` 0.x, so the tests replace
+    `fastmcp.server.auth.cimd.ssrf_safe_fetch_response` with an in-process fake.
+  - A document without `scope` gets the proxy's default scope, which for Google is
+    the full `userinfo.email` URI; a request for the short form `email` is answered
+    with an `invalid_scope` error redirect to the client. Well-behaved clients
+    request `scopes_supported` from the AS metadata, which is what the test does.
+  - A valid client first gets a 302 to `/consent?txn_id=…` (consent mode
+    `remember`); approving the CSRF-protected form redirects to
+    `accounts.google.com` with our upstream client ID and PKCE parameters.

@@ -142,8 +142,11 @@ left for you to delete in the Console (the script prints the links).
   start that exceeded the dialog's 10 s timeout. Retry; the instance is warm now.
 - `Configuration error:` on startup: a required env var is missing or malformed. The
   message names it. `gcloud run services logs read SERVICE --region REGION`.
-- Google sign-in succeeds but Claude shows an authorisation error: the email is not in
-  `ALLOWED_EMAILS` or is unverified. The log line says `rejected sign-in`.
+- Google sign-in succeeds but Claude says it could not finish connecting: the token
+  exchange was refused because the email is not in `ALLOWED_EMAILS` or is unverified.
+  The log line says `rejected sign-in`. With an **Internal** consent screen only
+  accounts of that Workspace organisation can sign in, so `ALLOWED_EMAILS` must list
+  one of those, not an address from another domain.
 - `redirect_uri_mismatch` from Google: the redirect URI on the OAuth client must be
   exactly `PUBLIC_BASE_URL/auth/callback`.
 - Everyone logged out after a redeploy: `FIRESTORE_ENABLED` is false, or the Google

@@ -16,6 +16,7 @@ from . import __version__
 from .auth import build_auth, build_client_storage
 from .config import Settings, load_settings
 from .events import EventProcessor, make_events_endpoint
+from .observability import init_sentry
 from .slack_client import SlackClient
 from .store import FirestoreStore, InMemoryStore, Store
 from .tools import Services, register_tools
@@ -141,6 +142,7 @@ def configure_logging(level: str) -> None:
 def main() -> None:
     settings = load_settings()
     configure_logging(settings.log_level)
+    init_sentry(settings)
     import uvicorn
 
     app = create_app(settings)

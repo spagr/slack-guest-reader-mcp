@@ -153,3 +153,18 @@ rate-limit policy all move quickly.
   timeout of the "Checking the server" step in Claude's connector dialog and made the
   first attempt fail. `deploy.sh` now passes `--cpu-boost`; `--min-instances=1` was
   rejected because it leaves the free tier.
+
+## 2026-10-14: Sentry, opt-in, with content never sent
+
+- `sentry-sdk` (2.x) is initialised only when `SENTRY_DSN` is set. The Starlette
+  integration is used (FastMCP runs on Starlette under uvicorn); Sentry's Cloud
+  Functions `GcpIntegration` from the onboarding page does not apply to Cloud Run.
+- Privacy settings are fixed in code, not configurable, through the SDK's
+  `data_collection` option (`send_default_pii` is deprecated in sentry-sdk 2.72):
+  no user info, cookies, request bodies, query strings or stack-frame locals,
+  because bodies and locals can hold Slack message text, which this server must
+  never emit. Tracing is off by default (`SENTRY_TRACES_SAMPLE_RATE=0`). Docs relied
+  on: docs.sentry.io/platforms/python/configuration/options (data_collection) and
+  /platforms/python/data-management/data-collected.
+- The DSN lives in Secret Manager like the other secrets; `deploy.sh` mounts it only
+  when a version exists.

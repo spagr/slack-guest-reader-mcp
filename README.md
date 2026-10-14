@@ -93,6 +93,8 @@ frontend intercepts).
 | `NOTIFY_GROUP_MENTIONS` | no | default `false` (`@here`/`@channel`) |
 | `EVENTS_TTL_DAYS` | no | default `30` |
 | `ALERT_WEBHOOK_URL` | no | phase 2: JSON POST for mentions and replies to you |
+| `SENTRY_DSN` | no | error reporting to Sentry; unset disables it. Sent without PII, request bodies or local variables |
+| `SENTRY_ENVIRONMENT` | no | default `production` |
 | `LOG_LEVEL` | no | default `INFO` |
 
 Configuration is validated at startup; a missing or malformed value stops the

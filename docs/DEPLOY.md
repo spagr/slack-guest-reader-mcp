@@ -101,6 +101,15 @@ workspace admin has created the Slack app. When `SLACK_BOT_TOKEN` is empty,
 the container starts. Every Slack tool then returns `invalid_auth` until you store the
 real token with `UPDATE_SECRETS=1 scripts/deploy.sh` and redeploy.
 
+### Error reporting with Sentry (optional)
+
+Create a Python project in Sentry (the "Cloud Run" or plain Python platform; not the
+Cloud Functions one, whose `GcpIntegration` does not apply) and store its DSN with
+`UPDATE_SECRETS=1 scripts/deploy.sh` at the `SENTRY_DSN` prompt. The next deploy
+mounts it and the server reports unhandled exceptions and 5xx responses. By design
+it sends no PII, no request bodies and no local variables, so Slack message text
+never leaves the service. Leave the secret empty to run without Sentry.
+
 ## 4. Connect in Claude
 
 Settings -> Connectors -> Add custom connector -> paste `https://<service-url>/mcp`.

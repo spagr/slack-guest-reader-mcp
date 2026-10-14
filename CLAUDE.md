@@ -199,6 +199,7 @@ MCP cannot push to the assistant. Notifications are pulled when the user asks.
 | `NOTIFY_THREAD_ACTIVITY` | no | default `true` |
 | `NOTIFY_GROUP_MENTIONS` | no | default `false` |
 | `ALERT_WEBHOOK_URL` | no | phase 2 |
+| `SENTRY_DSN` | no | optional error reporting; no PII, bodies or locals are sent |
 | `LOG_LEVEL` | no | default `INFO` |
 
 Validate config at startup with pydantic-settings and fail fast with a readable error. Provide `.env.example` with placeholders only.

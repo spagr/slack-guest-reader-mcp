@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     alert_webhook_url: str | None = None
     log_level: str = "INFO"
 
+    # --- Observability (optional) ---
+    sentry_dsn: SecretStr | None = Field(
+        default=None, description="Sentry DSN from Secret Manager; unset disables Sentry"
+    )
+    sentry_environment: str = "production"
+    sentry_traces_sample_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+
     # --- Server ---
     host: str = "0.0.0.0"  # noqa: S104 - Cloud Run requires binding all interfaces
     port: int = 8080

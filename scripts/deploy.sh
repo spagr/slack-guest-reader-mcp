@@ -51,6 +51,7 @@ info "Secrets"
 ensure_secret SLACK_BOT_TOKEN "Slack bot token (xoxb-…)" required
 ensure_secret GOOGLE_CLIENT_SECRET "Google OAuth client secret" required
 ensure_secret SLACK_SIGNING_SECRET "Slack signing secret (phase 2, may be empty for now)"
+ensure_secret SENTRY_DSN "Sentry DSN (optional error reporting, may be empty)"
 
 PUBLIC_BASE_URL="$(cloud_run_url)"
 save_var PUBLIC_BASE_URL "$PUBLIC_BASE_URL"
@@ -68,6 +69,10 @@ if [[ "$ENABLE_EVENTS" == "yes" ]]; then
     warn "store it with UPDATE_SECRETS=1 scripts/deploy.sh and redeploy to enable phase 2"
     ENABLE_EVENTS=no
   fi
+fi
+if secret_has_version SENTRY_DSN; then
+  SECRETS="$SECRETS,SENTRY_DSN=SENTRY_DSN:latest"
+  ok "Sentry enabled"
 fi
 # Joined with '|' because the allowlists themselves contain commas; `^|^` below tells
 # gcloud to split on '|' instead of the default ','.

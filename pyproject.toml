@@ -14,6 +14,7 @@ dependencies = [
     "py-key-value-aio[firestore,wrappers-encryption]>=0.4,<1",
     "uvicorn>=0.30",
     "cryptography>=43",
+    "sentry-sdk>=2.0",
 ]
 
 [project.scripts]

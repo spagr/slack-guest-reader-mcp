@@ -167,20 +167,42 @@ The successful token exchange went through the tokeninfo fallback from PR 4: the
 `id_token` Google returned had no email claim, so without that change this sign-in
 would have been rejected with `reason=no_email_claim`. Keep the fallback.
 
+## Local session 2026-10-22, later (phase 2 switched on server-side)
+
+- Safety net first (PR 6): `get_notifications` polls as well when the events receiver
+  has been silent for `EVENTS_STALE_HOURS` (default 6), so a subscription Slack quietly
+  disables cannot hide notifications. Test, docs and a DECISIONS note included.
+- Deployed with `ENABLE_EVENTS=yes`: the revision mounts `SLACK_SIGNING_SECRET`, the
+  startup log says `events=True`, smoke test passed, and an unsigned
+  `POST /slack/events` returns 401. `scripts/render-manifest.sh` produced
+  `slack/manifest.local.yaml` (gitignored) for the admin.
+- One `bootstrap.env` only now, in the main checkout, with `ENABLE_EVENTS=yes` saved.
+  Worktrees run the scripts with `ENV_FILE=<main checkout>/bootstrap.env`.
+
+**Waiting on the admin (step 2 of `docs/ADMIN_REQUEST.md`)**: enable Event
+Subscriptions with the request URL from `manifest.local.yaml` and the three bot events.
+Slack's `url_verification` will show in the log as `POST /slack/events` 200.
+
+**Verify once the admin is done**: ask someone in an allowlisted channel for a mention
+or a reaction, then `get_notifications`; the item must say `source: "event"`. Watch the
+log for `slack retry #n` (cold start longer than the 3 s ack; harmless, idempotent) and
+`events receiver silent` (the safety net kicked in). If retries are frequent, consider
+`--min-instances 1` in `deploy.sh`.
+
 ## Next steps, in order (local machine)
 
 ```bash
 # Phase 1 is verified end to end. To replace a secret later:
 UPDATE_SECRETS=1 scripts/deploy.sh            # paste the new value, Enter on the others
 
-# Phase 2 (the signing secret is already stored; events are still off)
-ENABLE_EVENTS=yes scripts/deploy.sh
+# Phase 2 is deployed (ENABLE_EVENTS=yes is saved in bootstrap.env). To re-render the
+# manifest for the admin:
 scripts/render-manifest.sh                              # -> slack/manifest.local.yaml
-# -> admin adds Event Subscriptions with the request URL from that file
 ```
 
-Waiting on: nothing for phase 1. Phase 2 needs the redeploy above and the admin adding
-Event Subscriptions with the rendered request URL.
+Waiting on: the admin enabling Event Subscriptions (see above). After that, the
+remaining work is tuning (open questions below) and the `member_count: null` fix for
+private channels (`conversations.info` needs `include_num_members=true`).
 
 Local run without GCP: `cp .env.example .env`, fill the Slack values and a Google
 client with redirect URI `http://localhost:8080/auth/callback`, keep

@@ -184,6 +184,7 @@ left for you to delete in the Console (the script prints the links).
   `STORAGE_ENCRYPTION_KEY` explicitly if you rotate secrets often).
 - A redeploy changed `ALLOWED_EMAILS` (or another value) you did not touch: `bootstrap.env`
   is read from the checkout the script runs in, and a git worktree has its own copy.
-  Diff the copies before deploying from a different directory, or keep a single one.
+  Keep a single copy in the main checkout and point other checkouts at it with
+  `ENV_FILE=/path/to/bootstrap.env scripts/deploy.sh`.
 - Slack `not_in_channel`: the bot was not invited to that channel.
 - Slack `missing_scope`: the app was created without one of the six scopes.

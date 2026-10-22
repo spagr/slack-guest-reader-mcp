@@ -39,10 +39,19 @@ save_var() {
   export "$name=$value"
 }
 
+# require_tty "what" — prompts need a real terminal. When stdin is not a TTY (the script
+# was started through an agent, a pipe or cron), `read -p` shows nothing and returns
+# empty, which silently skips the question. Fail loudly instead.
+require_tty() {
+  [[ -t 0 ]] && return 0
+  die "$1 needs an interactive terminal. Run this script yourself in Terminal, not through an agent or a pipe."
+}
+
 # ask VAR "prompt" [default] — prompt unless already set in the environment.
 ask() {
   local var="$1" prompt="$2" default="${3:-}" value
   if [[ -n "${!var:-}" ]]; then return; fi
+  require_tty "the question '$prompt'"
   if [[ -n "$default" ]]; then
     read -r -p "$prompt [$default]: " value; value="${value:-$default}"
   else
@@ -55,12 +64,14 @@ ask() {
 ask_secret() {
   local var="$1" prompt="$2" value
   if [[ -n "${!var:-}" ]]; then return; fi
+  require_tty "entering $var"
   read -r -s -p "$prompt (input hidden, Enter to skip): " value; echo
   export "$var=$value"
 }
 
 confirm() {
   local answer
+  require_tty "the question '$1'"
   read -r -p "$1 [y/N]: " answer
   [[ "$answer" =~ ^[Yy]$ ]]
 }
@@ -107,12 +118,15 @@ secret_has_version() {
 ensure_secret() {
   local name="$1" prompt="$2" required="${3:-}"
   if secret_exists "$name"; then
-    if [[ "${UPDATE_SECRETS:-0}" != "1" ]]; then ok "secret $name exists"; return; fi
+    if [[ "${UPDATE_SECRETS:-0}" != "1" ]]; then
+      ok "secret $name exists (not changed; UPDATE_SECRETS=1 to enter a new value)"; return
+    fi
   else
     gcloud secrets create "$name" --project="$PROJECT_ID" --replication-policy=automatic >/dev/null
     ok "created secret $name"
   fi
   local value
+  require_tty "entering $name"
   while true; do
     read -r -s -p "$prompt (input hidden, Enter to skip): " value; echo
     if [[ -z "$value" ]]; then
@@ -140,6 +154,15 @@ offer_placeholder_bot_token() {
   else
     die "secret SLACK_BOT_TOKEN has no value yet. Run: UPDATE_SECRETS=1 scripts/deploy.sh"
   fi
+}
+
+# bot_token_is_placeholder — true when the latest SLACK_BOT_TOKEN version is the fake
+# value stored by offer_placeholder_bot_token. The value is read into this shell only to
+# compare its prefix and is never printed.
+bot_token_is_placeholder() {
+  local latest
+  latest="$(gcloud secrets versions access latest --secret=SLACK_BOT_TOKEN --project="$PROJECT_ID" 2>/dev/null || true)"
+  [[ "$latest" == xoxb-PLACEHOLDER-* ]]
 }
 
 # secret_looks_valid NAME VALUE — cheap shape checks so a stray keystroke or a wrong

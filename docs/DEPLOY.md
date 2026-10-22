@@ -157,6 +157,11 @@ left for you to delete in the Console (the script prints the links).
 
 ## Troubleshooting
 
+- `scripts/deploy.sh` never asked for the bot token: the scripts only prompt in an
+  interactive terminal. Started through an agent, a pipe or `nohup`, a prompt would read
+  nothing, so they now stop with `needs an interactive terminal`. Run them yourself in
+  Terminal. Secrets that already have a value are left alone unless `UPDATE_SECRETS=1`
+  is set, except the placeholder bot token, which always triggers the prompt.
 - Claude's connector dialog says "Couldn't check the server": almost always a cold
   start that exceeded the dialog's 10 s timeout. Retry; the instance is warm now.
 - `Configuration error:` on startup: a required env var is missing or malformed. The

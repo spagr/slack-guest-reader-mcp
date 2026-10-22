@@ -144,6 +144,12 @@ sign-in. Only emails in `ALLOWED_EMAILS` (verified by Google) get through.
    to add Event Subscriptions with that request URL and bot events `message.channels`,
    `message.groups`, `reaction_added`, or to update the app from that manifest. Slack sends a `url_verification` challenge;
    the server answers it only with a valid signature.
+3. Watch the first days: the service runs with `--min-instances 0`, a cold start takes
+   longer than Slack's 3 s ack window, so the first event after an idle period is
+   retried by Slack (`slack retry #n` in the log; storage is idempotent). Should Slack
+   stop delivering altogether, `get_notifications` notices that no event arrived for
+   `EVENTS_STALE_HOURS` (default 6) and polls Slack as well, logging
+   `events receiver silent`. If those lines are frequent, consider `--min-instances 1`.
 
 ## 6. Teardown
 

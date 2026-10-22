@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     notify_thread_activity: bool = True
     notify_group_mentions: bool = False
     events_ttl_days: int = Field(default=30, ge=1, le=365)
+    events_stale_hours: float = Field(
+        default=6.0,
+        ge=0.0,
+        le=720.0,
+        description="When the events receiver has been silent this long, get_notifications "
+        "polls Slack as well (safety net against lost deliveries); 0 = always poll",
+    )
     alert_webhook_url: str | None = None
     log_level: str = "INFO"
 

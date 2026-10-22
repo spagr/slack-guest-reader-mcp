@@ -274,6 +274,48 @@ async def test_get_notifications_reads_events_then_polls_only_the_gap(
     assert float(gap_call["latest"]) <= now.timestamp() + 1  # polled only up to events-live time
 
 
+async def test_get_notifications_polls_again_when_receiver_is_silent(
+    fake_slack: FakeSlack, slack: SlackClient
+) -> None:
+    """Safety net: a receiver that has seen nothing for EVENTS_STALE_HOURS no longer
+    counts as the only source; the window is polled as well and duplicates dropped."""
+    store = InMemoryStore()
+    settings = events_settings(EVENTS_STALE_HOURS="6")
+    _, services = create_mcp(settings, store=store, slack=slack, auth=None)
+    now = datetime.now(UTC)
+    live_from = (now - timedelta(days=2)).timestamp()
+    missed_ts = f"{(now - timedelta(hours=1)).timestamp():.6f}"
+    fake_slack.add(CHANNEL, msg(missed_ts, ALICE, f"<@{ME}> did this arrive?"))
+
+    # Receiver alive an hour ago: inside the 1d window only events count, no polling.
+    await store.set_meta(
+        "events",
+        {
+            "first_received_at": live_from,
+            "last_received_at": (now - timedelta(hours=1)).timestamp(),
+        },
+    )
+    fake_slack.calls.clear()
+    raw = await collect_notifications(services, since="1d", limit=50, now=now)
+    assert raw == []
+    assert not [c for c in fake_slack.calls if c[0] == "conversations.history"]
+
+    # Receiver silent for 7 h: the same window is polled and the missed mention shows up.
+    await store.set_meta(
+        "events",
+        {
+            "first_received_at": live_from,
+            "last_received_at": (now - timedelta(hours=7)).timestamp(),
+        },
+    )
+    fake_slack.calls.clear()
+    raw = await collect_notifications(services, since="1d", limit=50, now=now)
+    items = await render_notifications(services, raw)
+    assert [(n["type"], n["source"]) for n in items] == [("mention", "poll")]
+    assert items[0]["message"]["ts"] == missed_ts
+    assert [c for c in fake_slack.calls if c[0] == "conversations.history"]
+
+
 async def test_alert_webhook_posts_for_mentions(fake_slack: FakeSlack, slack: SlackClient) -> None:
     store = InMemoryStore()
     settings = events_settings(ALERT_WEBHOOK_URL="https://alerts.example.com/hook")

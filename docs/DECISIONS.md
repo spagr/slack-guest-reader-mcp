@@ -96,6 +96,19 @@ rate-limit policy all move quickly.
   A background task was rejected because Cloud Run may throttle CPU after the
   response is sent.
 
+## 2026-10-22: Events are never the only source for long
+
+- Once the receiver has seen its first event, `get_notifications` trusts stored
+  events for everything after that moment and polls only the gap before it. That
+  made a silent delivery failure (subscription disabled by Slack after repeated
+  timeouts, a long outage) invisible: nothing would be reported and nothing logged.
+- Now `meta/events.last_received_at` is checked: when no event of any kind has
+  arrived for `EVENTS_STALE_HOURS` (default 6), the whole window is polled as in
+  phase 1 and merged; duplicates are removed by the (type, channel, ts, reaction)
+  key. Quiet periods cost one extra poll per call, which is phase-1 behaviour anyway.
+- `0` makes every call poll (events become a pure accelerator); very large values
+  restore the old trust-events-only behaviour.
+
 ## 2026-10-13: Google OAuth client is created by hand
 
 - Searched the gcloud reference. `gcloud iam oauth-clients` manages Workforce

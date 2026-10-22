@@ -389,8 +389,17 @@ async def collect_notifications(
     if events_live_from is not None:
         stored = await services.store.list_events(since_ts, limit)
         found.extend(_from_stored_event(e) for e in stored)
-        # Poll only the gap before the events receiver came online.
-        if since_dt < events_live_from:
+        silent_for = _receiver_silent_for(events_meta, now)
+        if silent_for is not None and silent_for >= settings.events_stale_hours * 3600:
+            # Safety net: nothing has arrived for a long time. Slack may have stopped
+            # delivering (subscription disabled after repeated timeouts, an outage), so
+            # poll the whole window as in phase 1; duplicates are dropped below.
+            logger.warning(
+                "events receiver silent for %d min, polling as well", int(silent_for // 60)
+            )
+            found.extend(await services.poller.poll(since=since_dt, now=now))
+        # Otherwise poll only the gap before the events receiver came online.
+        elif since_dt < events_live_from:
             found.extend(
                 await services.poller.poll(since=since_dt, until=events_live_from, now=now)
             )
@@ -409,6 +418,16 @@ async def collect_notifications(
         unique.append(item)
     unique.sort(key=lambda n: n.sort_ts, reverse=True)
     return unique[:limit]
+
+
+def _receiver_silent_for(events_meta: dict[str, Any] | None, now: datetime) -> float | None:
+    """Seconds since the events receiver last saw any event, or None when unknown."""
+    if not events_meta:
+        return None
+    last = events_meta.get("last_received_at") or events_meta.get("first_received_at")
+    if not last:
+        return None
+    return max(0.0, now.timestamp() - float(last))
 
 
 def _from_stored_event(event: StoredEvent) -> RawNotification:

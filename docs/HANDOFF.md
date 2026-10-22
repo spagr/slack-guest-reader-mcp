@@ -132,23 +132,55 @@ gcloud emulators firestore start --host-port=127.0.0.1:8681 \
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8681 uv run pytest -m emulator
 ```
 
+## Local session 2026-10-22 (real token stored; a stale `bootstrap.env` locked the operator out)
+
+The admin delivered the bot token and the signing secret. They were stored with
+`UPDATE_SECRETS=1 scripts/deploy.sh` and the service was redeployed twice; the connector
+then refused every sign-in and all `/mcp` calls returned 401. What happened, from the
+Cloud Run request log and the revision specs (the cloud session that worked on it in
+parallel could not see either):
+
+- The two deploys ran from the **main checkout**, which has its own `bootstrap.env`,
+  while the one tuned on 2026-10-14 lives in the **worktree**. The main-checkout copy
+  still listed only the operator's other-domain address in `ALLOWED_EMAILS`, so the
+  first deploy of the day shipped an allowlist without the account the Internal consent
+  screen admits. Claude's refresh was refused at `/token`, then its fresh sign-in too
+  (`rejected sign-in`, Google callback 200, `/token` 401). Nothing to do with the
+  id_token itself.
+- The second deploy, with both addresses back, fixed the allowlist. Claude has not
+  retried the sign-in since, so the connector still shows as disconnected until it is
+  re-authorised from Claude's settings.
+- PR 4 (tokeninfo fallback, `reason=` in the rejection log) was merged after that
+  deploy, so it reached the service only with the redeploy done in this session.
+
+Lesson, now in DEPLOY.md troubleshooting: `bootstrap.env` is per checkout. Keep one
+copy, or diff them before deploying from a different directory.
+
+**Verified afterwards, same day, against the real workspace** (connector re-authorised
+from Claude, then the tools called through it): `list_channels` resolves both
+allowlisted channels, `get_messages`, `get_thread`, `search_messages` and
+`get_notifications` return real data with resolved `@Name` mentions, local times,
+permalinks and reactions; `mention`, `reply_to_me` and `reaction` notifications all
+showed up. Phase 1 is done end to end.
+
+The successful token exchange went through the tokeninfo fallback from PR 4: the
+`id_token` Google returned had no email claim, so without that change this sign-in
+would have been rejected with `reason=no_email_claim`. Keep the fallback.
+
 ## Next steps, in order (local machine)
 
 ```bash
-# Once the admin sends the bot token (see docs/ADMIN_REQUEST.md):
-UPDATE_SECRETS=1 scripts/deploy.sh            # paste the token, Enter on the others
-# -> deploy.sh ends with scripts/smoke.sh; then in Claude: list_channels, get_messages,
-#    get_thread, search_messages, get_notifications
+# Phase 1 is verified end to end. To replace a secret later:
+UPDATE_SECRETS=1 scripts/deploy.sh            # paste the new value, Enter on the others
 
-# Phase 2
-UPDATE_SECRETS=1 ENABLE_EVENTS=yes scripts/deploy.sh   # paste the signing secret
+# Phase 2 (the signing secret is already stored; events are still off)
+ENABLE_EVENTS=yes scripts/deploy.sh
 scripts/render-manifest.sh                              # -> slack/manifest.local.yaml
 # -> admin adds Event Subscriptions with the request URL from that file
 ```
 
-Waiting on: the workspace admin creating the app from `slack/manifest-phase1.yaml`,
-inviting it to the agreed channels and handing over the bot token and signing secret
-(the short request is in `docs/ADMIN_REQUEST.md`).
+Waiting on: nothing for phase 1. Phase 2 needs the redeploy above and the admin adding
+Event Subscriptions with the rendered request URL.
 
 Local run without GCP: `cp .env.example .env`, fill the Slack values and a Google
 client with redirect URI `http://localhost:8080/auth/callback`, keep

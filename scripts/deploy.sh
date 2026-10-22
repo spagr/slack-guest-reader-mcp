@@ -48,7 +48,12 @@ done
 ok "roles bound (secretmanager.secretAccessor, datastore.user)"
 
 info "Secrets"
-ensure_secret SLACK_BOT_TOKEN "Slack bot token (xoxb-…)" required
+if bot_token_is_placeholder; then
+  warn "SLACK_BOT_TOKEN still holds the placeholder; Slack tools return invalid_auth until the real token is stored"
+  UPDATE_SECRETS=1 ensure_secret SLACK_BOT_TOKEN "Slack bot token from the admin (xoxb-…)" required
+else
+  ensure_secret SLACK_BOT_TOKEN "Slack bot token (xoxb-…)" required
+fi
 ensure_secret GOOGLE_CLIENT_SECRET "Google OAuth client secret" required
 ensure_secret SLACK_SIGNING_SECRET "Slack signing secret (phase 2, may be empty for now)"
 ensure_secret SENTRY_DSN "Sentry DSN (optional error reporting, may be empty)"

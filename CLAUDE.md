@@ -198,6 +198,7 @@ MCP cannot push to the assistant. Notifications are pulled when the user asks.
 | `THREAD_LOOKBACK_DAYS` | no | default `14` |
 | `NOTIFY_THREAD_ACTIVITY` | no | default `true` |
 | `NOTIFY_GROUP_MENTIONS` | no | default `false` |
+| `EVENTS_STALE_HOURS` | no | default `6`; phase 2 safety net: poll as well when no event arrived for this long |
 | `ALERT_WEBHOOK_URL` | no | phase 2 |
 | `SENTRY_DSN` | no | optional error reporting; no PII, bodies or locals are sent |
 | `LOG_LEVEL` | no | default `INFO` |

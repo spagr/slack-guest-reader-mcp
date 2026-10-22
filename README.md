@@ -92,6 +92,7 @@ frontend intercepts).
 | `NOTIFY_THREAD_ACTIVITY` | no | default `true` |
 | `NOTIFY_GROUP_MENTIONS` | no | default `false` (`@here`/`@channel`) |
 | `EVENTS_TTL_DAYS` | no | default `30` |
+| `EVENTS_STALE_HOURS` | no | default `6`: when no Slack event arrived for this long, `get_notifications` polls Slack as well, so a silently disabled subscription cannot hide notifications (`0` = always poll) |
 | `ALERT_WEBHOOK_URL` | no | phase 2: JSON POST for mentions and replies to you |
 | `SENTRY_DSN` | no | error reporting to Sentry; unset disables it. Sent without PII, request bodies or local variables |
 | `SENTRY_ENVIRONMENT` | no | default `production` |

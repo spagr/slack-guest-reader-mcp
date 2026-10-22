@@ -2,7 +2,16 @@
 # Shared helpers for bootstrap.sh, deploy.sh and teardown.sh. Sourced, not executed.
 # Nothing here prints secret values.
 
-set -euo pipefail
+set -Eeuo pipefail
+
+# `set -e` would otherwise end the script silently on the first failing command. Say
+# which one it was so a failure is never a blank line and a prompt.
+on_unexpected_error() {
+  local rc="$1" line="$2" cmd="$3"
+  printf '\033[1;31m ✗\033[0m unexpected failure (exit %s) at line %s: %s\n' "$rc" "$line" "$cmd" >&2
+  exit "$rc"
+}
+trap 'on_unexpected_error "$?" "$LINENO" "$BASH_COMMAND"' ERR
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$REPO_ROOT/bootstrap.env}"
@@ -13,6 +22,14 @@ warn()  { printf '\033[1;33m !\033[0m %s\n' "$*" >&2; }
 die()   { printf '\033[1;31m ✗\033[0m %s\n' "$*" >&2; exit 1; }
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "'$1' is not installed"; }
+
+# quiet "what" cmd... — run a command, hide its chatter, but show its stderr if it fails.
+quiet() {
+  local what="$1" err; shift
+  if ! err="$("$@" 2>&1 >/dev/null)"; then
+    die "$what failed: ${err:-(no output)}"
+  fi
+}
 
 # Load non-secret values collected by earlier runs (gitignored file).
 load_env() {
@@ -86,14 +103,19 @@ use_gcloud_config() {
   if gcloud config configurations describe "$GCLOUD_CONFIG" >/dev/null 2>&1; then
     ok "gcloud configuration '$GCLOUD_CONFIG' exists"
   else
-    gcloud config configurations create "$GCLOUD_CONFIG" --no-activate >/dev/null 2>&1
+    quiet "creating gcloud configuration '$GCLOUD_CONFIG'" \
+      gcloud config configurations create "$GCLOUD_CONFIG" --no-activate
     ok "created gcloud configuration '$GCLOUD_CONFIG'"
   fi
   export CLOUDSDK_ACTIVE_CONFIG_NAME="$GCLOUD_CONFIG"
   # `config set` only writes the property; it warns on stderr when the project does not
-  # exist yet (bootstrap creates it right after), so keep both quiet.
-  if [[ -n "${ACCOUNT:-}" ]]; then gcloud config set account "$ACCOUNT" >/dev/null 2>&1; fi
-  if [[ -n "${PROJECT_ID:-}" ]]; then gcloud config set project "$PROJECT_ID" >/dev/null 2>&1; fi
+  # exist yet (bootstrap creates it right after), so hide the chatter but not a failure.
+  if [[ -n "${ACCOUNT:-}" ]]; then
+    quiet "selecting account in configuration '$GCLOUD_CONFIG'" gcloud config set account "$ACCOUNT"
+  fi
+  if [[ -n "${PROJECT_ID:-}" ]]; then
+    quiet "selecting project in configuration '$GCLOUD_CONFIG'" gcloud config set project "$PROJECT_ID"
+  fi
 }
 
 require_login() {

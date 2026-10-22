@@ -84,11 +84,60 @@ async def test_code_exchange_embeds_allowlisted_identity(
     assert claims == {"sub": "1", "email": "operator@example.com", "email_verified": True}
 
 
+async def test_id_token_without_email_falls_back_to_tokeninfo(
+    provider: AllowlistedGoogleProvider,
+) -> None:
+    """Google does not guarantee email claims in every id_token (e.g. on refresh)."""
+    import httpx
+    import respx
+
+    tokens = {"access_token": "ya29.refreshed", "id_token": jwt_with({"sub": "1", "aud": "x"})}
+    with respx.mock() as router:
+        route = router.get("https://oauth2.googleapis.com/tokeninfo").mock(
+            return_value=httpx.Response(
+                200, json={"sub": "1", "email": "operator@example.com", "email_verified": "true"}
+            )
+        )
+        claims = await provider._extract_upstream_claims(tokens)
+    assert route.called
+    assert route.calls[0].request.url.params["access_token"] == "ya29.refreshed"
+    assert claims == {"sub": "1", "email": "operator@example.com", "email_verified": True}
+
+
+async def test_rejection_log_names_the_reason_without_the_email(
+    provider: AllowlistedGoogleProvider, caplog: pytest.LogCaptureFixture
+) -> None:
+    tokens = {
+        "access_token": "ya29.x",
+        "id_token": jwt_with({"sub": "9", "email": "intruder@example.com", "email_verified": True}),
+    }
+    with caplog.at_level("WARNING"), pytest.raises(TokenError):
+        await provider._extract_upstream_claims(tokens)
+    assert "reason=not_allowlisted source=id_token has_id_token=True" in caplog.text
+    assert "intruder" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("claims", "reason"),
+    [
+        (None, "no_identity"),
+        ({"sub": "1"}, "no_email_claim"),
+        ({"email": "operator@example.com", "email_verified": False}, "email_unverified"),
+        ({"email": "other@example.com", "email_verified": True}, "not_allowlisted"),
+        ({"email": "operator@example.com", "email_verified": True}, None),
+    ],
+)
+def test_rejection_reason(claims: dict[str, Any] | None, reason: str | None) -> None:
+    from slack_guest_reader.auth import rejection_reason
+
+    assert rejection_reason(claims, ALLOWED) == reason
+
+
 async def test_code_exchange_fails_closed_without_identity(
     provider: AllowlistedGoogleProvider, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def no_identity(_: dict[str, Any]) -> None:
-        return None
+    async def no_identity(_: dict[str, Any]) -> tuple[None, str]:
+        return None, "none"
 
     monkeypatch.setattr(provider, "_identity_claims", no_identity)
     with pytest.raises(TokenError):

@@ -156,20 +156,22 @@ parallel could not see either):
 Lesson, now in DEPLOY.md troubleshooting: `bootstrap.env` is per checkout. Keep one
 copy, or diff them before deploying from a different directory.
 
-Not verified in this session: the real bot token against Slack (no tool call has run
-since it was stored; the scripts never print it and this session did not read it).
-The first `list_channels` from Claude tells: a channel list means the token works,
-`invalid_auth` means the stored value is wrong (`UPDATE_SECRETS=1 scripts/deploy.sh`
-to replace it), `not_in_channel` means the app was not invited.
+**Verified afterwards, same day, against the real workspace** (connector re-authorised
+from Claude, then the tools called through it): `list_channels` resolves both
+allowlisted channels, `get_messages`, `get_thread`, `search_messages` and
+`get_notifications` return real data with resolved `@Name` mentions, local times,
+permalinks and reactions; `mention`, `reply_to_me` and `reaction` notifications all
+showed up. Phase 1 is done end to end.
+
+The successful token exchange went through the tokeninfo fallback from PR 4: the
+`id_token` Google returned had no email claim, so without that change this sign-in
+would have been rejected with `reason=no_email_claim`. Keep the fallback.
 
 ## Next steps, in order (local machine)
 
 ```bash
-# 1. In Claude -> Settings -> Connectors: reconnect the custom connector (Google sign-in
-#    with an allowlisted account), then call list_channels, get_messages, get_thread,
-#    search_messages, get_notifications.
-# If list_channels returns invalid_auth, the stored token is wrong:
-UPDATE_SECRETS=1 scripts/deploy.sh            # paste the token, Enter on the others
+# Phase 1 is verified end to end. To replace a secret later:
+UPDATE_SECRETS=1 scripts/deploy.sh            # paste the new value, Enter on the others
 
 # Phase 2 (the signing secret is already stored; events are still off)
 ENABLE_EVENTS=yes scripts/deploy.sh
@@ -177,10 +179,8 @@ scripts/render-manifest.sh                              # -> slack/manifest.loca
 # -> admin adds Event Subscriptions with the request URL from that file
 ```
 
-Waiting on: the operator re-authorising the connector in Claude and running the first
-real tool calls. The admin side (app created, token and signing secret handed over) is
-done; whether the app was invited to the allowlisted channels shows up as
-`not_in_channel` on the first call.
+Waiting on: nothing for phase 1. Phase 2 needs the redeploy above and the admin adding
+Event Subscriptions with the rendered request URL.
 
 Local run without GCP: `cp .env.example .env`, fill the Slack values and a Google
 client with redirect URI `http://localhost:8080/auth/callback`, keep

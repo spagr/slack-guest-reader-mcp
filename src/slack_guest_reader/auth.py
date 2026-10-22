@@ -37,15 +37,27 @@ REQUIRED_SCOPES = ["openid", "email"]
 
 def is_email_allowed(claims: dict[str, Any] | None, allowed: Iterable[str]) -> bool:
     """True only for a verified email that is on the allowlist (case-insensitive)."""
+    return rejection_reason(claims, allowed) is None
+
+
+def rejection_reason(claims: dict[str, Any] | None, allowed: Iterable[str]) -> str | None:
+    """Why a set of identity claims is not acceptable, or None when it is.
+
+    The reason is a short token safe to log (it never contains the email itself).
+    """
     if not claims:
-        return False
+        return "no_identity"
     email = str(claims.get("email") or "").strip().lower()
+    if not email:
+        return "no_email_claim"
     verified = claims.get("email_verified")
     if isinstance(verified, str):
         verified = verified.lower() == "true"
-    if not email or not verified:
-        return False
-    return email in {e.lower() for e in allowed}
+    if not verified:
+        return "email_unverified"
+    if email not in {e.lower() for e in allowed}:
+        return "not_allowlisted"
+    return None
 
 
 def decode_jwt_payload(token: str) -> dict[str, Any] | None:
@@ -71,30 +83,46 @@ class AllowlistedGoogleProvider(GoogleProvider):
         super().__init__(**kwargs)
         self._allowed_emails = frozenset(e.lower() for e in allowed_emails)
 
-    async def _identity_claims(self, idp_tokens: dict[str, Any]) -> dict[str, Any] | None:
+    async def _identity_claims(
+        self, idp_tokens: dict[str, Any]
+    ) -> tuple[dict[str, Any] | None, str]:
+        """Return (claims, source). Prefer the id_token; fall back to Google's tokeninfo.
+
+        Google does not guarantee the email claims in every id_token (notably the one
+        returned on a refresh), so an id_token without an email is not trusted as the
+        final word; the access token is looked up instead.
+        """
         id_token = idp_tokens.get("id_token")
         if id_token:
             claims = decode_jwt_payload(str(id_token))
-            if claims:
-                return claims
+            if claims and claims.get("email"):
+                return claims, "id_token"
         access_token = idp_tokens.get("access_token")
         if not access_token:
-            return None
+            return None, "none"
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 response = await client.get(GOOGLE_TOKENINFO, params={"access_token": access_token})
-        except httpx.HTTPError:
-            return None
+        except httpx.HTTPError as exc:
+            logger.warning("tokeninfo lookup failed: %s", type(exc).__name__)
+            return None, "tokeninfo"
         if response.status_code != 200:
-            return None
+            logger.warning("tokeninfo lookup returned HTTP %d", response.status_code)
+            return None, "tokeninfo"
         data = response.json()
-        return data if isinstance(data, dict) else None
+        return (data if isinstance(data, dict) else None), "tokeninfo"
 
     async def _extract_upstream_claims(self, idp_tokens: dict[str, Any]) -> dict[str, Any] | None:
         """Called when exchanging the Google code (and on refresh): reject early."""
-        claims = await self._identity_claims(idp_tokens)
-        if not is_email_allowed(claims, self._allowed_emails):
-            logger.warning("rejected sign-in: account not on the allowlist or email unverified")
+        claims, source = await self._identity_claims(idp_tokens)
+        reason = rejection_reason(claims, self._allowed_emails)
+        if reason is not None:
+            logger.warning(
+                "rejected sign-in: reason=%s source=%s has_id_token=%s",
+                reason,
+                source,
+                bool(idp_tokens.get("id_token")),
+            )
             raise TokenError(
                 "invalid_grant", "This Google account is not allowed to use this server."
             )
@@ -120,8 +148,9 @@ class AllowlistedGoogleProvider(GoogleProvider):
             if claims.get("email_verified") is not None
             else upstream.get("email_verified"),
         }
-        if not is_email_allowed(candidate, self._allowed_emails):
-            logger.warning("rejected request: token belongs to a non-allowlisted account")
+        reason = rejection_reason(candidate, self._allowed_emails)
+        if reason is not None:
+            logger.warning("rejected request: reason=%s", reason)
             return None
         return access
 

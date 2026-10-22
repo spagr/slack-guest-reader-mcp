@@ -132,23 +132,55 @@ gcloud emulators firestore start --host-port=127.0.0.1:8681 \
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8681 uv run pytest -m emulator
 ```
 
+## Local session 2026-10-22 (real token stored; a stale `bootstrap.env` locked the operator out)
+
+The admin delivered the bot token and the signing secret. They were stored with
+`UPDATE_SECRETS=1 scripts/deploy.sh` and the service was redeployed twice; the connector
+then refused every sign-in and all `/mcp` calls returned 401. What happened, from the
+Cloud Run request log and the revision specs (the cloud session that worked on it in
+parallel could not see either):
+
+- The two deploys ran from the **main checkout**, which has its own `bootstrap.env`,
+  while the one tuned on 2026-10-14 lives in the **worktree**. The main-checkout copy
+  still listed only the operator's other-domain address in `ALLOWED_EMAILS`, so the
+  first deploy of the day shipped an allowlist without the account the Internal consent
+  screen admits. Claude's refresh was refused at `/token`, then its fresh sign-in too
+  (`rejected sign-in`, Google callback 200, `/token` 401). Nothing to do with the
+  id_token itself.
+- The second deploy, with both addresses back, fixed the allowlist. Claude has not
+  retried the sign-in since, so the connector still shows as disconnected until it is
+  re-authorised from Claude's settings.
+- PR 4 (tokeninfo fallback, `reason=` in the rejection log) was merged after that
+  deploy, so it reached the service only with the redeploy done in this session.
+
+Lesson, now in DEPLOY.md troubleshooting: `bootstrap.env` is per checkout. Keep one
+copy, or diff them before deploying from a different directory.
+
+Not verified in this session: the real bot token against Slack (no tool call has run
+since it was stored; the scripts never print it and this session did not read it).
+The first `list_channels` from Claude tells: a channel list means the token works,
+`invalid_auth` means the stored value is wrong (`UPDATE_SECRETS=1 scripts/deploy.sh`
+to replace it), `not_in_channel` means the app was not invited.
+
 ## Next steps, in order (local machine)
 
 ```bash
-# Once the admin sends the bot token (see docs/ADMIN_REQUEST.md):
+# 1. In Claude -> Settings -> Connectors: reconnect the custom connector (Google sign-in
+#    with an allowlisted account), then call list_channels, get_messages, get_thread,
+#    search_messages, get_notifications.
+# If list_channels returns invalid_auth, the stored token is wrong:
 UPDATE_SECRETS=1 scripts/deploy.sh            # paste the token, Enter on the others
-# -> deploy.sh ends with scripts/smoke.sh; then in Claude: list_channels, get_messages,
-#    get_thread, search_messages, get_notifications
 
-# Phase 2
-UPDATE_SECRETS=1 ENABLE_EVENTS=yes scripts/deploy.sh   # paste the signing secret
+# Phase 2 (the signing secret is already stored; events are still off)
+ENABLE_EVENTS=yes scripts/deploy.sh
 scripts/render-manifest.sh                              # -> slack/manifest.local.yaml
 # -> admin adds Event Subscriptions with the request URL from that file
 ```
 
-Waiting on: the workspace admin creating the app from `slack/manifest-phase1.yaml`,
-inviting it to the agreed channels and handing over the bot token and signing secret
-(the short request is in `docs/ADMIN_REQUEST.md`).
+Waiting on: the operator re-authorising the connector in Claude and running the first
+real tool calls. The admin side (app created, token and signing secret handed over) is
+done; whether the app was invited to the allowlisted channels shows up as
+`not_in_channel` on the first call.
 
 Local run without GCP: `cp .env.example .env`, fill the Slack values and a Google
 client with redirect URI `http://localhost:8080/auth/callback`, keep

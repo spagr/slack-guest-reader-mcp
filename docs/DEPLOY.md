@@ -176,5 +176,8 @@ left for you to delete in the Console (the script prints the links).
 - Everyone logged out after a redeploy: `FIRESTORE_ENABLED` is false, or the Google
   client secret was rotated (keys derive from it; set `JWT_SIGNING_KEY` and
   `STORAGE_ENCRYPTION_KEY` explicitly if you rotate secrets often).
+- A redeploy changed `ALLOWED_EMAILS` (or another value) you did not touch: `bootstrap.env`
+  is read from the checkout the script runs in, and a git worktree has its own copy.
+  Diff the copies before deploying from a different directory, or keep a single one.
 - Slack `not_in_channel`: the bot was not invited to that channel.
 - Slack `missing_scope`: the app was created without one of the six scopes.

@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 REPLAY_WINDOW_SECONDS = 5 * 60
 EVENT_BUDGET_SECONDS = 2.5  # Slack wants an ack within 3 s
 ALERTED_TYPES = frozenset({"mention", "reply_to_me"})
+PARENT_TEXT_CHARS = 500  # enough for the rendered snippet; the full parent stays in Slack
 
 
 def verify_slack_signature(
@@ -60,7 +61,7 @@ class EventProcessor:
         self._services = services
         self._ttl = ttl_seconds
         self._alert_url = alert_webhook_url
-        self._parent_authors: dict[tuple[str, str], str] = {}
+        self._parents: dict[tuple[str, str], dict[str, Any]] = {}
 
     @property
     def _channels(self) -> frozenset[str]:
@@ -91,21 +92,28 @@ class EventProcessor:
             "events", {"first_received_at": now, "last_received_at": now}
         )
 
-    async def _parent_author(self, channel: str, thread_ts: str) -> str | None:
+    async def _parent(self, channel: str, thread_ts: str) -> dict[str, Any] | None:
+        """Thread parent as {ts, user, text}; text is kept so the snippet needs no refetch."""
         key = (channel, thread_ts)
-        if key in self._parent_authors:
-            return self._parent_authors[key]
+        if key in self._parents:
+            return self._parents[key]
         try:
             messages = await self._services.slack.replies(channel, thread_ts, limit=1)
         except SlackApiError as exc:
             logger.info("could not load thread parent: %s", exc.error)
             return None
-        author = str(messages[0].get("user") or "") if messages else None
-        if author:
-            if len(self._parent_authors) > 2000:
-                self._parent_authors.clear()
-            self._parent_authors[key] = author
-        return author
+        if not messages or not messages[0].get("user"):
+            return None
+        first = messages[0]
+        parent = {
+            "ts": thread_ts,
+            "user": str(first.get("user")),
+            "text": str(first.get("text") or "")[:PARENT_TEXT_CHARS],
+        }
+        if len(self._parents) > 2000:
+            self._parents.clear()
+        self._parents[key] = parent
+        return parent
 
     async def _on_message(self, event_id: str, event: dict[str, Any]) -> str | None:
         channel = str(event.get("channel") or "")
@@ -123,9 +131,8 @@ class EventProcessor:
         my_threads: set[str] = set()
         if is_thread_reply(event):
             my_threads = await store.get_my_threads(channel)
-            parent_author = await self._parent_author(channel, thread_ts)
-            if parent_author:
-                parent = {"ts": thread_ts, "user": parent_author}
+            parent = await self._parent(channel, thread_ts)
+            parent_author = parent["user"] if parent else None
         kind = classify_message(event, rules, my_threads=my_threads, parent_author=parent_author)
         if kind is None:
             return None

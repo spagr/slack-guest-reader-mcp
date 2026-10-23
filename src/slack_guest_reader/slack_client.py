@@ -189,7 +189,13 @@ class SlackClient:
         return messages
 
     async def message_at(self, channel: str, ts: str) -> dict[str, Any] | None:
-        """Fetch exactly one top-level message by its ts (used for reaction notifications)."""
+        """Fetch exactly one message by its ts, top-level or a reply in a thread.
+
+        Used to hydrate event notifications: `reaction_added` carries only the item's
+        ts, not its text or `thread_ts`, and replies never appear in
+        `conversations.history`. `conversations.replies` accepts the ts of any message
+        in a thread, so it is the fallback; both calls are bounded to that one ts.
+        """
         body = await self.call(
             "conversations.history",
             channel=channel,
@@ -198,8 +204,27 @@ class SlackClient:
             inclusive="true",
             limit=1,
         )
-        messages: list[dict[str, Any]] = body.get("messages", [])
-        return messages[0] if messages else None
+        for message in body.get("messages", []):
+            if message.get("ts") == ts:
+                return dict(message)
+        try:
+            body = await self.call(
+                "conversations.replies",
+                channel=channel,
+                ts=ts,
+                latest=ts,
+                oldest=ts,
+                inclusive="true",
+                limit=2,
+            )
+        except SlackApiError as exc:
+            if exc.error in {"thread_not_found", "message_not_found"}:
+                return None
+            raise
+        for message in body.get("messages", []):
+            if message.get("ts") == ts:
+                return dict(message)
+        return None
 
     async def channel_info(self, channel: str) -> dict[str, Any]:
         body = await self.call("conversations.info", channel=channel)

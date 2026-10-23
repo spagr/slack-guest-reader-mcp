@@ -189,6 +189,22 @@ log for `slack retry #n` (cold start longer than the 3 s ack; harmless, idempote
 `events receiver silent` (the safety net kicked in). If retries are frequent, consider
 `--min-instances 1` in `deploy.sh`.
 
+## Local session 2026-10-23 (events live; hydration fix)
+
+- The admin enabled Event Subscriptions; events arrive and are stored (`source: event`
+  items for mention, reply_to_me, thread_activity and reaction).
+- First real results showed unhydrated event items: a reaction on a **thread reply**
+  had an empty text (`conversations.history` never returns replies), and
+  `reply_to_me` had an empty parent snippet (the receiver dropped the parent text).
+  Fixed in PR 7, see DECISIONS 2026-10-23. Deployed and verified through the
+  connector: the reaction item now has text, `thread_ts`, `edited` and the `+1`
+  reaction; the reply_to_me item stored before the fix has its parent snippet
+  (fetched on read); no item came back with `hydrated: false`.
+- Known cosmetic gap, not fixed: `parent.snippet` shows raw `<@U…>` mentions (poll and
+  event alike), while `message.text` resolves them to names.
+- Terminal-panel tabs on this machine open with an oh-my-zsh update prompt that eats
+  the first character of a typed command; prefix commands with `true; `.
+
 ## Next steps, in order (local machine)
 
 ```bash

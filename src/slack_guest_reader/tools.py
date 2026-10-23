@@ -342,7 +342,9 @@ def register_tools(mcp: FastMCP, services: Services) -> None:
 
         Each item has a `type` (mention | reply_to_me | thread_activity | reaction), the
         message, and for replies a short `parent` snippet. Own messages are excluded.
-        Without `since`, only what's new since the previous call is returned. Read-only.
+        Without `since`, only what's new since the previous call is returned. An item with
+        `hydrated: false` refers to a message that could not be fetched (deleted, or no
+        longer visible to the bot); open its `permalink` instead. Read-only.
         """
         limit = clamp_limit(limit, 50)
         with time_budget(40):
@@ -409,9 +411,22 @@ async def collect_notifications(
     else:
         found.extend(await services.poller.poll(since=since_dt, now=now))
 
+    # Polling reports one aggregated `reaction` item per message; an event reports each
+    # reaction on its own. When both exist for a message, the events are more precise.
+    by_event = {
+        (n.channel, str(n.message.get("ts") or ""))
+        for n in found
+        if n.type == "reaction" and n.source == "event"
+    }
     seen: set[tuple[str, str, str, str]] = set()
     unique: list[RawNotification] = []
     for item in found:
+        if (
+            item.type == "reaction"
+            and item.source != "event"
+            and (item.channel, str(item.message.get("ts") or "")) in by_event
+        ):
+            continue
         if item.key in seen:
             continue
         seen.add(item.key)
@@ -453,15 +468,7 @@ def _from_stored_event(event: StoredEvent) -> RawNotification:
 async def render_notifications(
     services: Services, items: list[RawNotification]
 ) -> list[dict[str, Any]]:
-    # Reaction events only carry the message ts; fetch the message so the text is shown.
-    for item in items:
-        if item.type == "reaction" and not item.message.get("text") and item.message.get("ts"):
-            try:
-                fetched = await services.slack.message_at(item.channel, str(item.message["ts"]))
-            except SlackApiError:
-                fetched = None
-            if fetched:
-                item.message = fetched
+    await hydrate_notifications(services, items)
     all_messages = [n.message for n in items] + [n.parent for n in items if n.parent]
     for item in items:
         if item.reacting_user:
@@ -493,5 +500,56 @@ async def render_notifications(
                 "by": names.get(item.reacting_user or "", item.reacting_user),
             }
         entry["source"] = item.source
+        if not item.hydrated:
+            # The referenced message could not be fetched: say so instead of an empty text.
+            entry["hydrated"] = False
         out.append(entry)
     return out
+
+
+async def hydrate_notifications(services: Services, items: list[RawNotification]) -> None:
+    """Fill in what event payloads lack, in place.
+
+    `reaction_added` carries only the reacted message's ts, and events stored before
+    parents were kept with their text have a parent without text. Each message is
+    fetched once per call; anything that cannot be fetched marks the item
+    `hydrated=False` so the reader knows to follow the permalink.
+    """
+    fetched: dict[tuple[str, str], dict[str, Any] | None] = {}
+
+    async def fetch(channel: str, ts: str) -> dict[str, Any] | None:
+        key = (channel, ts)
+        if key not in fetched:
+            try:
+                fetched[key] = await services.slack.message_at(channel, ts)
+            except SlackApiError as exc:
+                logger.info("could not hydrate message: %s", exc.error)
+                fetched[key] = None
+        return fetched[key]
+
+    for item in items:
+        ts = str(item.message.get("ts") or "")
+        if item.type == "reaction" and item.source == "event" and ts:
+            message = await fetch(item.channel, ts)
+            if message is None:
+                item.hydrated = False
+            else:
+                item.message = _with_event_reaction(message, item)
+        if item.parent and item.parent.get("ts") and "text" not in item.parent:
+            parent = await fetch(item.channel, str(item.parent["ts"]))
+            if parent is None:
+                item.hydrated = False
+            else:
+                item.parent = parent
+
+
+def _with_event_reaction(message: dict[str, Any], item: RawNotification) -> dict[str, Any]:
+    """The event can arrive before Slack lists the reaction on the message; add it."""
+    if not item.reaction:
+        return message
+    reactions = [dict(r) for r in message.get("reactions") or []]
+    if any(r.get("name") == item.reaction for r in reactions):
+        return message
+    users = [item.reacting_user] if item.reacting_user else []
+    reactions.append({"name": item.reaction, "count": 1, "users": users})
+    return {**message, "reactions": reactions}

@@ -172,13 +172,29 @@ class FakeSlack:
 
     def _conversations_replies(self, form: dict[str, str]) -> dict[str, Any]:
         channel, ts = form["channel"], form["ts"]
-        parent = next((m for m in self.messages.get(channel, []) if m["ts"] == ts), None)
+        # Like Slack, `ts` may be the parent or any reply in the thread.
+        parent_ts = next(
+            (
+                p
+                for (c, p), rs in self.replies.items()
+                if c == channel and any(r["ts"] == ts for r in rs)
+            ),
+            ts,
+        )
+        parent = next((m for m in self.messages.get(channel, []) if m["ts"] == parent_ts), None)
         if parent is None:
             return {"ok": False, "error": "thread_not_found"}
         oldest = float(form.get("oldest", "0") or 0)
-        rows = [parent] + [
-            r for r in self.replies.get((channel, ts), []) if float(r["ts"]) > oldest
-        ]
+        latest = float(form.get("latest", "0") or 0) or None
+        inclusive = form.get("inclusive") == "true"
+
+        def in_window(r: dict[str, Any]) -> bool:
+            t = float(r["ts"])
+            if inclusive:
+                return t >= oldest and (latest is None or t <= latest)
+            return t > oldest and (latest is None or t < latest)
+
+        rows = [parent] + [r for r in self.replies.get((channel, parent_ts), []) if in_window(r)]
         return self._paged(rows, form, self.page_size_cap)
 
     def _conversations_info(self, form: dict[str, str]) -> dict[str, Any]:

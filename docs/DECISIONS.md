@@ -96,6 +96,25 @@ rate-limit policy all move quickly.
   A background task was rejected because Cloud Run may throttle CPU after the
   response is sent.
 
+## 2026-10-23: Event notifications are hydrated when read
+
+- First real events showed two gaps. A `reaction` item had an empty text and no
+  reactions: `reaction_added` carries only the item's ts, and the fetch used
+  `conversations.history`, which never returns thread replies (the reacted message was
+  a reply). A `reply_to_me` item had an empty parent snippet: the receiver fetched the
+  parent to learn its author but kept only the author.
+- `SlackClient.message_at` now falls back to `conversations.replies`, which accepts
+  the ts of any message in a thread (docs.slack.dev, conversations.replies, `ts`
+  argument). Both calls are bounded to that single ts.
+- The receiver stores the parent's text (first 500 characters) with the event, so the
+  snippet needs no call when read. Events stored earlier get their parent fetched on
+  read. Fetches are memoised per call; no cross-call message cache, as most calls
+  touch only a handful of messages and a cache would hold message text longer.
+- What cannot be fetched is marked `hydrated: false` instead of an empty text.
+- When gap polling and an event both report a reaction on one message, the event
+  items win (they name the emoji and who added it); the aggregated poll item is
+  dropped.
+
 ## 2026-10-22: Events are never the only source for long
 
 - Once the receiver has seen its first event, `get_notifications` trusts stored

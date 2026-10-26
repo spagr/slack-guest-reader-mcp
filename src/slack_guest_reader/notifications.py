@@ -121,6 +121,7 @@ class RawNotification:
     reaction: str | None = None
     reacting_user: str | None = None
     source: str = "poll"
+    hydrated: bool = True
 
     @property
     def key(self) -> tuple[str, str, str, str]:

@@ -215,6 +215,13 @@ log for `slack retry #n` (cold start longer than the 3 s ack; harmless, idempote
 - Needs the admin: add the `files:read` bot scope and Reinstall to Workspace (optional
   step 3 in `docs/ADMIN_REQUEST.md`). Until then `get_file` answers with a clear
   "files:read scope missing" error.
+- Deployed from the PR branch with `ENABLE_FILE_CONTENT=yes` (startup log
+  `files=True`, smoke test passed). Verified through the connector: message files now
+  carry `size` and `readable: true`. Not verified yet: a `get_file` call itself (the
+  connector must reload its tool list in a new Claude conversation) and the download
+  against real Slack, which needs the `files:read` scope first.
+- Observed in passing, not investigated: `get_thread(limit=1)` returned the newest reply
+  instead of the oldest, although the tool says "oldest first".
 
 ## Next steps, in order (local machine)
 

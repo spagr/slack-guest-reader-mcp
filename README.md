@@ -25,10 +25,12 @@ consent; `docs/ADMIN_REQUEST.md` is a template for asking.
 | `get_thread(channel, thread_ts, limit=100)` | Parent plus replies, oldest first |
 | `search_messages(query, channels?, since="14d", limit=30)` | Case-insensitive keyword / `"phrase"` search over recent history, including replies in active threads |
 | `get_notifications(since?, limit=50)` | Mentions, replies to you, thread activity, reactions. Without `since`: what's new since the last call |
+| `get_file(channel, ts, file_id)` | **Opt-in** (`ENABLE_FILE_CONTENT=true`, scope `files:read`): an image or PDF attached to that message, returned to the assistant as image / embedded PDF |
 
 Every message carries `channel`, `ts`, `thread_ts`, `author` (id + name), `time` in
 your `TIMEZONE`, rendered `text` (`@Name`, `#channel`, links with URLs), `reply_count`,
-`reactions` (with whether you reacted), file **metadata only**, and a `permalink`.
+`reactions` (with whether you reacted), file **metadata** (name, type, size; `readable`
+when `get_file` can return it), and a `permalink`.
 Every tool has a `limit` with a hard maximum of 200. The channel allowlist is enforced
 server-side on every call, even if the bot was invited elsewhere.
 
@@ -94,6 +96,8 @@ frontend intercepts).
 | `EVENTS_TTL_DAYS` | no | default `30` |
 | `EVENTS_STALE_HOURS` | no | default `6`: when no Slack event arrived for this long, `get_notifications` polls Slack as well, so a silently disabled subscription cannot hide notifications (`0` = always poll) |
 | `ALERT_WEBHOOK_URL` | no | phase 2: JSON POST for mentions and replies to you |
+| `ENABLE_FILE_CONTENT` | no | default `false`: registers `get_file` for images and PDFs; the Slack app needs `files:read` |
+| `MAX_FILE_BYTES` | no | default `5000000`; bigger images are returned as Slack's thumbnail, bigger PDFs are refused |
 | `SENTRY_DSN` | no | error reporting to Sentry; unset disables it. Sent without PII, request bodies or local variables |
 | `SENTRY_ENVIRONMENT` | no | default `production` |
 | `LOG_LEVEL` | no | default `INFO` |
@@ -147,6 +151,11 @@ from slack_guest_reader.app import create_mcp
 ## Security and privacy
 
 - Read-only by design: no write scopes, no write code paths.
+- File contents only with the opt-in `get_file`: images and PDFs attached to a message
+  in an allowlisted channel, size-capped, held in memory for one call and never
+  stored. The bot token is sent only to `files.slack.com`; remote files and any other
+  host never get it (redirects are checked by hand). Without the flag the `files:read`
+  scope can be left out of the manifest.
 - Allowlists enforced server-side for channels and for emails; emails are re-checked
   on every request, not only at sign-in.
 - Logs contain IDs, counts, latencies and error codes. Never message text, names or

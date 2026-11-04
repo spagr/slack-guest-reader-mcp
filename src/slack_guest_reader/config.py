@@ -77,6 +77,17 @@ class Settings(BaseSettings):
         "polls Slack as well (safety net against lost deliveries); 0 = always poll",
     )
     alert_webhook_url: str | None = None
+    enable_file_content: bool = Field(
+        default=False,
+        description="Register get_file, which returns images and PDFs attached to messages "
+        "in allowlisted channels. Needs the files:read bot scope; nothing is stored",
+    )
+    max_file_bytes: int = Field(
+        default=5_000_000,
+        ge=100_000,
+        le=20_000_000,
+        description="Largest file get_file downloads; bigger images fall back to a thumbnail",
+    )
     log_level: str = "INFO"
 
     # --- Observability (optional) ---

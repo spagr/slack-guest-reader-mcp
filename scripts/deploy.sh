@@ -21,6 +21,7 @@ ask ALLOWED_EMAILS "Google account emails allowed to connect (comma-separated)"
 ask GOOGLE_CLIENT_ID "Google OAuth client ID"
 ask TIMEZONE "Timezone for rendered times (IANA name, e.g. Europe/Prague)" "UTC"
 ask ENABLE_EVENTS "Enable the Slack Events receiver (phase 2)? yes/no" "no"
+ask ENABLE_FILE_CONTENT "Let get_file read attached images and PDFs (needs files:read)? yes/no" "no"
 
 if [[ -d /usr/share/zoneinfo && ! -f "/usr/share/zoneinfo/$TIMEZONE" ]]; then
   die "TIMEZONE '$TIMEZONE' is not an IANA zone name (try Europe/Prague). Fix it in $ENV_FILE"
@@ -85,6 +86,10 @@ ENV_VARS="SLACK_CHANNEL_ALLOWLIST=${SLACK_CHANNEL_ALLOWLIST}|ME_USER_ID=${ME_USE
 ENV_VARS="$ENV_VARS|ALLOWED_EMAILS=${ALLOWED_EMAILS}|GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
 ENV_VARS="$ENV_VARS|PUBLIC_BASE_URL=${PUBLIC_BASE_URL}|TIMEZONE=${TIMEZONE}|FIRESTORE_ENABLED=true"
 ENV_VARS="$ENV_VARS|GOOGLE_CLOUD_PROJECT=${PROJECT_ID}|LOG_LEVEL=${LOG_LEVEL:-INFO}"
+if [[ "$ENABLE_FILE_CONTENT" == "yes" ]]; then
+  ENV_VARS="$ENV_VARS|ENABLE_FILE_CONTENT=true"
+  ok "get_file enabled (the Slack app needs the files:read scope)"
+fi
 
 info "Deploying $SERVICE to $REGION (Cloud Build from source)"
 gcloud run deploy "$SERVICE" \

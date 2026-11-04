@@ -15,6 +15,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterator
 from contextvars import ContextVar
 from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 
@@ -42,6 +43,26 @@ class SlackBudgetExceeded(SlackApiError):
 
     def __init__(self, method: str) -> None:
         super().__init__("time_budget_exceeded", method, 0)
+
+
+# Hosts that may receive the bot token on a file download (docs.slack.dev, Working with
+# files: compare the parsed host exactly, never a prefix).
+SLACK_FILE_HOSTS = frozenset({"files.slack.com"})
+REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+MAX_REDIRECTS = 3
+
+
+class FileDownloadError(Exception):
+    """A file could not be downloaded; `code` is short and safe to log or show."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+def is_slack_file_url(url: str) -> bool:
+    parts = urlsplit(url)
+    return parts.scheme == "https" and (parts.hostname or "") in SLACK_FILE_HOSTS
 
 
 @contextlib.contextmanager
@@ -225,6 +246,60 @@ class SlackClient:
             if message.get("ts") == ts:
                 return dict(message)
         return None
+
+    async def download(
+        self, url: str, *, max_bytes: int, accept: Callable[[str], bool]
+    ) -> tuple[bytes, str]:
+        """GET a Slack-hosted file; return (content, content type). Needs `files:read`.
+
+        The bot token is only ever sent to a Slack file host. Redirects are followed by
+        hand: a target on a Slack file host gets the token again, any other https target
+        is requested without it (as the Slack docs require). The body is streamed and
+        cut off above `max_bytes`. Slack answers a token without `files:read` with an
+        HTML sign-in page, which `accept` rejects.
+        """
+        if not is_slack_file_url(url):
+            raise FileDownloadError("untrusted_host")
+        for _ in range(MAX_REDIRECTS + 1):
+            remaining = _remaining()
+            if remaining is not None and remaining <= 0:
+                raise FileDownloadError("time_budget_exceeded")
+            timeout = min(remaining, 15.0) if remaining is not None else 15.0
+            parts = urlsplit(url)
+            if parts.scheme != "https":
+                raise FileDownloadError("insecure_redirect")
+            headers = {"Authorization": f"Bearer {self._token}"} if is_slack_file_url(url) else {}
+            try:
+                async with self._http.stream(
+                    "GET", url, headers=headers, follow_redirects=False, timeout=timeout
+                ) as response:
+                    if response.status_code in REDIRECT_STATUSES:
+                        location = response.headers.get("location")
+                        if not location:
+                            raise FileDownloadError("bad_redirect")
+                        url = urljoin(url, location)
+                        continue
+                    if response.status_code != 200:
+                        raise FileDownloadError(f"http_{response.status_code}")
+                    content_type = (
+                        response.headers.get("content-type", "").split(";")[0].strip().lower()
+                    )
+                    if not accept(content_type):
+                        raise FileDownloadError("unexpected_content_type")
+                    declared = response.headers.get("content-length")
+                    if declared and declared.isdigit() and int(declared) > max_bytes:
+                        raise FileDownloadError("too_large")
+                    chunks: list[bytes] = []
+                    total = 0
+                    async for chunk in response.aiter_bytes():
+                        total += len(chunk)
+                        if total > max_bytes:
+                            raise FileDownloadError("too_large")
+                        chunks.append(chunk)
+                    return b"".join(chunks), content_type
+            except httpx.HTTPError as exc:
+                raise FileDownloadError(type(exc).__name__) from None
+        raise FileDownloadError("too_many_redirects")
 
     async def channel_info(self, channel: str) -> dict[str, Any]:
         body = await self.call("conversations.info", channel=channel)

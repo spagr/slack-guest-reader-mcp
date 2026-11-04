@@ -25,7 +25,9 @@ only with your knowledge, I'd need a small Slack app installed in your workspace
 - Join channels on its own, read direct messages, or read any channel it isn't
   explicitly invited to. On my side there is an additional allowlist of channel IDs,
   so even an accidental invite elsewhere would not expose that channel.
-- Download file contents. It only sees file names and links.
+- Download file contents, unless you also grant the optional `files:read` scope: then
+  it can read images and PDFs attached to messages in the invited channels, on demand,
+  without storing them. Without that scope it only sees file names and links.
 - Act for anyone but me: access on my side is locked to my own Google account.
 
 **Setup (about 5 minutes)**
@@ -92,6 +94,13 @@ vašeho nasazení a do gitu nepatří).
 > Za vás jako prostředníky tedy stačí: přeposlat adminovi, pohlídat bezpečné předání
 > tokenu a secretu, a pak jednou poslat zprávu „jdeme na krok 2“. Díky!
 
+> **Volitelný krok 3 (cca 2 minuty, admin):** aby asistent viděl i obsah přiložených
+> screenshotů a PDF, přidat v nastavení aplikace (OAuth & Permissions → Scopes → Bot
+> Token Scopes) scope `files:read` a potvrdit **Reinstall to Workspace**. Aplikace pak
+> umí na vyžádání přečíst obrázek nebo PDF přiložené ke zprávě v pozvaných kanálech,
+> nic neukládá a pořád nic nepíše. Bot token by měl po reinstalaci zůstat stejný; kdyby
+> Slack vydal nový, pošlete mi ho stejně bezpečnou cestou jako poprvé.
+
 ### Co uděláte vy mezi krokem 1 a 2
 
 1. `UPDATE_SECRETS=1 ENABLE_EVENTS=yes scripts/deploy.sh`: vložte bot token i signing
@@ -99,3 +108,9 @@ vašeho nasazení a do gitu nepatří).
 2. V Claude ověřte `list_channels`: místo `invalid_auth` musí vrátit názvy kanálů.
 3. Teprve potom pošlete signál pro krok 2. Když admin uloží events URL dřív, ověření
    ze strany Slacku selže a bude ho muset zopakovat.
+
+### Po kroku 3
+
+`ENABLE_FILE_CONTENT=yes scripts/deploy.sh`, pak v Claude zavolejte `get_file` na
+zprávu s obrázkem. Chyba o chybějícím `files:read` znamená, že reinstalace ještě
+neproběhla.

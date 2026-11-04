@@ -96,6 +96,26 @@ rate-limit policy all move quickly.
   A background task was rejected because Cloud Run may throttle CPU after the
   response is sent.
 
+## 2026-11-04: Attached images and PDFs through an opt-in get_file
+
+- A real thread carried its actual content only in a screenshot; metadata and a
+  permalink were not enough. File contents were a non-goal, so this is opt-in
+  (`ENABLE_FILE_CONTENT`, off by default) and limited to images (PNG, JPEG, GIF, WebP)
+  and PDFs. CLAUDE.md's non-goal now names this exception.
+- The file is located through the message (`channel`, `ts`, `file_id`), not with
+  `files.info`: the channel allowlist then applies exactly as for every other tool, and
+  a file ID from elsewhere cannot be read. `message_at` handles thread replies.
+- Download per docs.slack.dev, Working with files (fetched 2026-11-04): `url_private`
+  with `Authorization: Bearer` needs `files:read`; remote files (`mode: external`,
+  `is_external`, `filetype: remote`) never get the token; the parsed host must equal
+  `files.slack.com`; redirects are followed by hand, a non-Slack target is requested
+  without the token. A token without the scope gets an HTML page with status 200,
+  so the content type is checked and reported as a missing scope.
+- Images over 3.75 MB (Claude's limit is 5 MB after base64) are returned as Slack's
+  largest thumbnail (`thumb_1024` … `thumb_360`). PDFs up to `MAX_FILE_BYTES` are an
+  MCP embedded resource (FastMCP 4.1 `File`); larger ones are refused with the
+  permalink. Nothing is cached; logs carry file ID, kind, variant, bytes and ms only.
+
 ## 2026-10-23: Event notifications are hydrated when read
 
 - First real events showed two gaps. A `reaction` item had an empty text and no

@@ -60,7 +60,7 @@ Commit it along with the work, so the next session, cloud or local, can pick up 
 - Any write action to Slack: posting, reacting, editing, joining channels.
 - User tokens (`xoxp`/`xoxc`), cookies, browser automation, Slack's internal web-client APIs.
 - Reading channels outside the allowlist, even if the bot was invited there.
-- Downloading file contents. Expose file metadata (name, type, permalink) only.
+- Downloading file contents, except through the opt-in `get_file` tool (`ENABLE_FILE_CONTENT`, off by default): images and PDFs only, attached to a message in an allowlisted channel, size-capped, never stored or logged. Everything else is file metadata (name, type, size, permalink) only.
 - A long-term archive. Snapshotting may come later as an optional feature, so keep it out of the core.
 
 ## Tech stack
@@ -116,6 +116,7 @@ Claude custom connectors expect the MCP server to behave as an OAuth authorizati
 | `channels:read`, `groups:read` | channel names and info |
 | `users:read` | resolve user IDs to names |
 | `reactions:read` | reactions on messages, `reaction_added` events |
+| `files:read` | optional, only for `ENABLE_FILE_CONTENT`: download attached images and PDFs |
 
 No write scopes. Ever.
 
@@ -155,6 +156,7 @@ All tools are read-only and return compact, LLM-friendly JSON. Each message carr
 | `get_thread(channel, thread_ts, limit=100)` | Parent + replies. |
 | `search_messages(query, channels?, since="14d", limit=30)` | Case-insensitive substring/keyword search done server-side over fetched history, because `search.messages` needs a user token. Include matching thread replies for threads active in the window. |
 | `get_notifications(since?, limit=50)` | "What's new for me" — see below. |
+| `get_file(channel, ts, file_id)` | Opt-in (`ENABLE_FILE_CONTENT`): the image or PDF attached to that message, for the assistant to read. |
 
 Tool descriptions must be written for an LLM: state what the tool returns, when to use which tool, and that everything is read-only.
 
@@ -200,6 +202,8 @@ MCP cannot push to the assistant. Notifications are pulled when the user asks.
 | `NOTIFY_GROUP_MENTIONS` | no | default `false` |
 | `EVENTS_STALE_HOURS` | no | default `6`; phase 2 safety net: poll as well when no event arrived for this long |
 | `ALERT_WEBHOOK_URL` | no | phase 2 |
+| `ENABLE_FILE_CONTENT` | no | default `false`; registers `get_file`, needs the `files:read` scope |
+| `MAX_FILE_BYTES` | no | default `5000000`; larger images fall back to a Slack thumbnail |
 | `SENTRY_DSN` | no | optional error reporting; no PII, bodies or locals are sent |
 | `LOG_LEVEL` | no | default `INFO` |
 

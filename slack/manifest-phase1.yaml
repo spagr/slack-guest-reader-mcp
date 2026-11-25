@@ -23,6 +23,9 @@ oauth_config:
       - groups:read
       - users:read
       - reactions:read
+      # Optional: only for ENABLE_FILE_CONTENT (get_file reads images and PDFs).
+      # Remove it if the operator does not need attachment contents.
+      - files:read
 settings:
   org_deploy_enabled: false
   socket_mode_enabled: false

@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .files import file_kind
+
 USER_MENTION_RE = re.compile(r"<@([UW][A-Z0-9]+)(?:\|([^>]*))?>")
 CHANNEL_MENTION_RE = re.compile(r"<#([CG][A-Z0-9]+)(?:\|([^>]*))?>")
 SPECIAL_MENTION_RE = re.compile(r"<!(here|channel|everyone)(?:\|[^>]*)?>")
@@ -97,8 +99,12 @@ def format_message(
     me_user_id: str,
     team_domain: str | None,
     channel_names: Mapping[str, str] | None = None,
+    file_content: bool = False,
 ) -> dict[str, Any]:
-    """Compact JSON for one message. Files are metadata only; nothing is downloaded."""
+    """Compact JSON for one message. Files are metadata only; nothing is downloaded.
+
+    With `file_content`, files that get_file can return are marked `readable`.
+    """
     ts = str(raw.get("ts", ""))
     thread_ts_raw = raw.get("thread_ts")
     thread_ts = str(thread_ts_raw) if thread_ts_raw else None
@@ -115,15 +121,19 @@ def format_message(
         }
         for r in raw.get("reactions") or []
     ]
-    files = [
-        {
+    files = []
+    for f in raw.get("files") or []:
+        entry: dict[str, Any] = {
             "id": f.get("id"),
             "name": f.get("name") or f.get("title"),
             "type": f.get("filetype") or f.get("mimetype"),
             "permalink": f.get("permalink"),
         }
-        for f in raw.get("files") or []
-    ]
+        if f.get("size") is not None:
+            entry["size"] = f.get("size")
+        if file_content and file_kind(f) is not None:
+            entry["readable"] = True
+        files.append(entry)
 
     out: dict[str, Any] = {
         "channel": channel,

@@ -205,6 +205,24 @@ log for `slack retry #n` (cold start longer than the 3 s ack; harmless, idempote
 - Terminal-panel tabs on this machine open with an oh-my-zsh update prompt that eats
   the first character of a typed command; prefix commands with `true; `.
 
+## Local session 2026-11-04 (opt-in get_file for images and PDFs)
+
+- A thread's real content was only in a screenshot. New opt-in tool `get_file(channel,
+  ts, file_id)` behind `ENABLE_FILE_CONTENT` (off by default): images and PDFs attached
+  to a message in an allowlisted channel, size-capped, never stored. See DECISIONS
+  2026-11-04 for the token/host rules taken from the Slack docs.
+- Manifests list `files:read` as optional. `deploy.sh` asks for `ENABLE_FILE_CONTENT`.
+- Needs the admin: add the `files:read` bot scope and Reinstall to Workspace (optional
+  step 3 in `docs/ADMIN_REQUEST.md`). Until then `get_file` answers with a clear
+  "files:read scope missing" error.
+- Deployed from the PR branch with `ENABLE_FILE_CONTENT=yes` (startup log
+  `files=True`, smoke test passed). Verified through the connector: message files now
+  carry `size` and `readable: true`. Not verified yet: a `get_file` call itself (the
+  connector must reload its tool list in a new Claude conversation) and the download
+  against real Slack, which needs the `files:read` scope first.
+- Observed in passing, not investigated: `get_thread(limit=1)` returned the newest reply
+  instead of the oldest, although the tool says "oldest first".
+
 ## Next steps, in order (local machine)
 
 ```bash

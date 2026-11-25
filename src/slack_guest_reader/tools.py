@@ -10,9 +10,11 @@ from typing import Annotated, Any
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.tools import ToolResult
 from pydantic import Field
 
 from .config import Settings
+from .files import read_file
 from .notifications import NotificationPoller, NotificationRules, RawNotification
 from .render import format_message, snippet
 from .slack_client import SlackApiError, SlackClient, time_budget
@@ -113,6 +115,7 @@ class Services:
                 tz=self.settings.tzinfo,
                 me_user_id=self.settings.me_user_id,
                 team_domain=team_domain,
+                file_content=self.settings.enable_file_content,
             )
             for msg in messages
         ]
@@ -325,6 +328,41 @@ def register_tools(mcp: FastMCP, services: Services) -> None:
             "truncated": truncated,
             "results": results,
         }
+
+    if settings.enable_file_content:
+
+        @mcp.tool(annotations=read_only)
+        async def get_file(
+            channel: Annotated[str, Field(description="Channel ID (C…) or #name")],
+            ts: Annotated[str, Field(description="`ts` of the message the file is attached to")],
+            file_id: Annotated[
+                str, Field(description="File `id` (F…) from that message's `files`")
+            ],
+        ) -> ToolResult:
+            """Read an image or PDF attached to a message, e.g. a screenshot whose content
+            matters for the conversation.
+
+            Use it for files marked `readable: true` in `files` of a message returned by the
+            other tools; pass that message's channel and `ts`. Returns short metadata and the
+            image itself (large images as Slack's thumbnail) or the PDF. Only files attached
+            to messages in allowlisted channels can be read. Nothing is stored. Read-only.
+            On an error, point the user to the file's `permalink` instead.
+            """
+            with time_budget():
+                channel_id = await services.resolve_channel(channel)
+                try:
+                    message = await services.slack.message_at(channel_id, ts)
+                except SlackApiError as exc:
+                    raise ToolError(f"Slack error reading the message: {exc.error}") from None
+                if message is None:
+                    raise ToolError("No message with that ts in this channel.")
+                file = next((f for f in message.get("files") or [] if f.get("id") == file_id), None)
+                if file is None:
+                    raise ToolError(
+                        "That file is not attached to this message. Use the message's own "
+                        "`ts` and a file `id` from its `files` list."
+                    )
+                return await read_file(services, file)
 
     @mcp.tool(annotations=read_only)
     async def get_notifications(

@@ -28,7 +28,9 @@ Read-only access to an allowlisted set of Slack channels in a workspace the oper
 is a guest in. Start with list_channels. Use get_messages for recent channel history,
 get_thread to expand a thread, search_messages for keyword search over recent history,
 and get_notifications for "what's new for me" (mentions, replies, thread activity,
-reactions). Nothing here can post, react or modify anything in Slack.
+reactions). When get_file is available, use it to read an image or PDF attached to a
+message (files marked `readable`). Nothing here can post, react or modify anything in
+Slack.
 """
 
 
@@ -147,10 +149,11 @@ def main() -> None:
 
     app = create_app(settings)
     logger.info(
-        "starting slack-guest-reader %s channels=%d events=%s",
+        "starting slack-guest-reader %s channels=%d events=%s files=%s",
         __version__,
         len(settings.slack_channel_allowlist),
         settings.slack_signing_secret is not None,
+        settings.enable_file_content,
     )
     uvicorn.run(app, host=settings.host, port=settings.port, log_level=settings.log_level.lower())
 
